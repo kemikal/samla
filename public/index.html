@@ -42,32 +42,64 @@
     };
     let code = null;
     let name = null;
+    let playerId = null;
     let myAnswer = null;
 
-    // Kod från QR-länken (/?code=1234) fyller i fältet och döljer det
+    // Sessionen sparas så att sidladdning och återanslutning på mobilen fungerar
+    const saved = JSON.parse(sessionStorage.getItem("samla") ?? "null");
     const urlCode = new URLSearchParams(location.search).get("code");
     if (urlCode) {
       $("code").value = urlCode;
       $("code").classList.add("hidden");
-      $("name").focus();
     }
 
-    $("joinBtn").onclick = () => {
-      $("error").textContent = "";
-      socket.emit("player:join", { code: $("code").value, name: $("name").value }, (res) => {
-        if (res.error) return ($("error").textContent = res.error);
-        code = $("code").value.trim();
-        name = $("name").value.trim();
-        show("wait");
-      });
-    };
-    $("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click();
-
-    socket.on("game:question", ({ index, total, text, options }) => {
+    function renderQuestion({ index, total, text, options }) {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
       $("options").innerHTML = options.map((o, i) => `<button data-i="${i}">${o}</button>`).join("");
-      myAnswer = null;
       show("question");
+    }
+
+    function lockAnswer(i) {
+      for (const b of $("options").querySelectorAll("button")) b.disabled = true;
+      const btn = $("options").querySelector(`button[data-i="${i}"]`);
+      if (btn) btn.style.outline = "4px solid var(--fg)";
+    }
+
+    function join(payload) {
+      $("error").textContent = "";
+      socket.emit("player:join", payload, (res) => {
+        if (res.error) {
+          sessionStorage.removeItem("samla");
+          $("error").textContent = res.error;
+          return show("join");
+        }
+        code = payload.code;
+        name = res.name;
+        playerId = res.playerId;
+        sessionStorage.setItem("samla", JSON.stringify({ code, name, playerId }));
+        if (res.state.phase === "question") {
+          renderQuestion(res.state.question);
+          myAnswer = res.state.answer;
+          if (myAnswer !== null) lockAnswer(myAnswer);
+        } else {
+          show("wait");
+        }
+      });
+    }
+
+    $("joinBtn").onclick = () => join({ code: $("code").value.trim(), name: $("name").value });
+
+    socket.on("connect", () => {
+      // Första laddningen med sparad session, eller återanslutning efter tappad förbindelse
+      const s = playerId ? { code, name, playerId } : saved;
+      if (s && (!urlCode || s.code === urlCode)) join(s);
+    });
+    // OBS: får inte returnera false, då blockeras tangenttryckningen (buggen från lektionen)
+    $("name").onkeydown = (e) => { if (e.key === "Enter") $("joinBtn").click(); };
+
+    socket.on("game:question", (q) => {
+      myAnswer = null;
+      renderQuestion(q);
     });
 
     $("options").onclick = (e) => {
@@ -75,8 +107,7 @@
       if (!btn) return;
       myAnswer = Number(btn.dataset.i);
       socket.emit("player:answer", { code, option: myAnswer });
-      for (const b of $("options").querySelectorAll("button")) b.disabled = true;
-      btn.style.outline = "4px solid var(--fg)";
+      lockAnswer(myAnswer);
     };
 
     socket.on("game:results", ({ correct, leaderboard }) => {
@@ -91,6 +122,8 @@
       const me = leaderboard.find((p) => p.name === name);
       const place = leaderboard.findIndex((p) => p.name === name) + 1;
       $("resultText").textContent = `Spelet är slut! Du kom på plats ${place} av ${leaderboard.length} med ${me?.score ?? 0} poäng.`;
+      sessionStorage.removeItem("samla");
+      playerId = null;
       show("result");
     });
   </script>

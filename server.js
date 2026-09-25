@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
+import { randomUUID } from "node:crypto";
 
 // Frågebank i minnet, seedad från questions.json. Varje fråga får ett id.
 let nextId = 1;
@@ -21,8 +22,9 @@ app.get("/admin", (_req, res) => res.sendFile("admin.html", { root: publicDir })
 
 // QR-kod som SVG med länk till spelarsidan med koden ifylld
 app.get("/qr/:code", async (req, res) => {
-  const proto = req.get("x-forwarded-proto") ?? req.protocol;
-  const url = `${proto}://${req.get("host")}/?code=${encodeURIComponent(req.params.code)}`;
+  const host = req.get("host");
+  const proto = /^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https";
+  const url = `${proto}://${host}/?code=${encodeURIComponent(req.params.code)}`;
   res.type("svg").send(await QRCode.toString(url, { type: "svg", margin: 1 }));
 });
 
@@ -96,6 +98,17 @@ function endGame(game) {
   console.log("spel slut", game.code);
 }
 
+function questionPayload(game) {
+  const q = game.questions[game.current];
+  return { index: game.current, total: game.questions.length, text: q.text, options: q.options };
+}
+
+function uniqueName(game, name) {
+  const taken = new Set([...game.players.values()].map((p) => p.name.toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; ; n++) if (!taken.has(`${name} ${n}`.toLowerCase())) return `${name} ${n}`;
+}
+
 function answerCounts(game) {
   const counts = game.questions[game.current].options.map(() => 0);
   for (const option of game.answers.values()) counts[option]++;
@@ -110,12 +123,7 @@ function sendQuestion(game) {
   const q = game.questions[game.current];
   game.answers = new Map();
   game.phase = "question";
-  io.to(game.code).emit("game:question", {
-    index: game.current,
-    total: game.questions.length,
-    text: q.text,
-    options: q.options,
-  });
+  io.to(game.code).emit("game:question", questionPayload(game));
 }
 
 io.on("connection", (socket) => {
@@ -141,20 +149,34 @@ io.on("connection", (socket) => {
     io.to(code).emit("game:lobby", lobby(game));
   });
 
-  socket.on("player:join", ({ code, name } = {}, ack) => {
+  // Join används både första gången och vid återanslutning (samma playerId).
+  // Sen anslutning är tillåten: spelaren får aktuell fråga direkt.
+  socket.on("player:join", ({ code, name, playerId } = {}, ack) => {
     const game = games.get(String(code ?? "").trim());
-    name = String(name ?? "").trim().slice(0, 20);
     if (!game) return ack({ error: "Hittar inget spel med den koden" });
-    if (game.current >= 0) return ack({ error: "Spelet har redan startat" });
-    if (!name) return ack({ error: "Skriv ett namn" });
-    const taken = [...game.players.values()].some((p) => p.name.toLowerCase() === name.toLowerCase());
-    if (taken) return ack({ error: "Namnet är upptaget" });
-    game.players.set(socket.id, { name, score: 0, connected: true });
+    let player = playerId && game.players.get(playerId);
+    if (player) {
+      player.connected = true;
+      player.socketId = socket.id;
+      console.log("återansluten", player.name, "->", game.code);
+    } else {
+      name = String(name ?? "").trim().slice(0, 20);
+      if (!name) return ack({ error: "Skriv ett namn" });
+      playerId = randomUUID();
+      player = { name: uniqueName(game, name), score: 0, connected: true, socketId: socket.id };
+      game.players.set(playerId, player);
+      console.log("spelare", player.name, "->", game.code);
+    }
     socket.join(game.code);
     socket.data.code = game.code;
     socket.data.role = "player";
-    console.log("spelare", name, "->", game.code);
-    ack({ ok: true });
+    socket.data.playerId = playerId;
+    const state = { phase: game.phase ?? "lobby" };
+    if (game.phase === "question") {
+      state.question = questionPayload(game);
+      state.answer = game.answers.get(playerId) ?? null;
+    }
+    ack({ ok: true, name: player.name, playerId, state });
     io.to(game.code).emit("game:lobby", lobby(game));
   });
 
@@ -168,11 +190,12 @@ io.on("connection", (socket) => {
 
   socket.on("player:answer", ({ option } = {}) => {
     const game = games.get(socket.data.code);
-    if (!game || game.phase !== "question" || !game.players.has(socket.id)) return;
-    if (game.answers.has(socket.id)) return; // ett svar per fråga
+    const playerId = socket.data.playerId;
+    if (!game || game.phase !== "question" || !game.players.has(playerId)) return;
+    if (game.answers.has(playerId)) return; // ett svar per fråga
     option = Number(option);
     if (!(option >= 0 && option < game.questions[game.current].options.length)) return;
-    game.answers.set(socket.id, option);
+    game.answers.set(playerId, option);
     // Fördelningen går bara till värden, spelarna ska inte påverkas av varandra
     const progress = { answered: game.answers.size, total: activePlayers(game) };
     io.to(game.code).except(game.host).emit("game:answered", progress);
@@ -198,14 +221,11 @@ io.on("connection", (socket) => {
     const game = games.get(socket.data.code);
     if (!game) return;
     if (socket.data.role === "host") return endGame(game);
-    const player = game.players.get(socket.id);
-    if (!player) return;
-    if (game.current < 0) {
-      game.players.delete(socket.id);
-      io.to(game.code).emit("game:lobby", lobby(game));
-    } else {
-      player.connected = false;
-      io.to(game.code).emit("game:lobby", lobby(game));
+    const player = game.players.get(socket.data.playerId);
+    if (!player || player.socketId !== socket.id) return; // redan återansluten med ny socket
+    player.connected = false;
+    io.to(game.code).emit("game:lobby", lobby(game));
+    if (game.current >= 0) {
       io.to(game.host).emit("game:answered", {
         answered: game.answers.size,
         total: activePlayers(game),
