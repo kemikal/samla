@@ -57,6 +57,10 @@ function endGame(game) {
   console.log("spel slut", game.code);
 }
 
+function activePlayers(game) {
+  return [...game.players.values()].filter((p) => p.connected).length;
+}
+
 function sendQuestion(game) {
   const q = questions[game.current];
   game.answers = new Map();
@@ -92,7 +96,7 @@ io.on("connection", (socket) => {
     if (!name) return ack({ error: "Skriv ett namn" });
     const taken = [...game.players.values()].some((p) => p.name.toLowerCase() === name.toLowerCase());
     if (taken) return ack({ error: "Namnet är upptaget" });
-    game.players.set(socket.id, { name, score: 0 });
+    game.players.set(socket.id, { name, score: 0, connected: true });
     socket.join(game.code);
     socket.data.code = game.code;
     socket.data.role = "player";
@@ -116,7 +120,7 @@ io.on("connection", (socket) => {
     option = Number(option);
     if (!(option >= 0 && option < 4)) return;
     game.answers.set(socket.id, option);
-    io.to(game.code).emit("game:answered", { answered: game.answers.size, total: game.players.size });
+    io.to(game.code).emit("game:answered", { answered: game.answers.size, total: activePlayers(game) });
   });
 
   socket.on("host:next", () => {
@@ -133,7 +137,21 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", (reason) => console.log("disconnect", socket.id, reason));
+  socket.on("disconnect", (reason) => {
+    console.log("disconnect", socket.id, reason);
+    const game = games.get(socket.data.code);
+    if (!game) return;
+    if (socket.data.role === "host") return endGame(game);
+    const player = game.players.get(socket.id);
+    if (!player) return;
+    if (game.current < 0) {
+      game.players.delete(socket.id);
+      io.to(game.code).emit("game:lobby", lobby(game));
+    } else {
+      player.connected = false;
+      io.to(game.code).emit("game:answered", { answered: game.answers.size, total: activePlayers(game) });
+    }
+  });
 });
 
 const PORT = process.env.PORT ?? 3000;
