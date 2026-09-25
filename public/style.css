@@ -40,6 +40,9 @@ button { cursor: pointer; background: var(--fg); color: var(--bg); font-weight: 
 .hidden { display: none; }
 
 /* Admin */
+.lobbyRow { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+.lobbyRow img { background: #fff; padding: 8px; border-radius: 8px; }
+hr { border: 0; border-top: 1px solid #333; margin: 24px 0; }
 h2 { font-size: 1.2rem; margin: 24px 0 8px; }
 .optRow { display: flex; gap: 8px; align-items: center; }
 .optRow input[type="radio"] { width: auto; margin: 0 0 8px; }

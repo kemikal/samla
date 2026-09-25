@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import QRCode from "qrcode";
 
 // Frågebank i minnet, seedad från questions.json. Varje fråga får ett id.
 let nextId = 1;
@@ -17,6 +18,13 @@ const publicDir = fileURLToPath(new URL("./public", import.meta.url));
 app.use(express.json());
 app.use(express.static(publicDir));
 app.get("/admin", (_req, res) => res.sendFile("admin.html", { root: publicDir }));
+
+// QR-kod som SVG med länk till spelarsidan med koden ifylld
+app.get("/qr/:code", async (req, res) => {
+  const proto = req.get("x-forwarded-proto") ?? req.protocol;
+  const url = `${proto}://${req.get("host")}/?code=${encodeURIComponent(req.params.code)}`;
+  res.type("svg").send(await QRCode.toString(url, { type: "svg", margin: 1 }));
+});
 
 // REST-API för frågebanken
 app.get("/api/questions", (_req, res) => res.json(questions));
@@ -69,8 +77,8 @@ function leaderboard(game) {
 }
 
 function sendResults(game) {
-  const q = questions[game.current];
-  const counts = [0, 0, 0, 0];
+  const q = game.questions[game.current];
+  const counts = q.options.map(() => 0);
   for (const [id, option] of game.answers) {
     counts[option]++;
     if (option === q.correct) game.players.get(id).score += 1000;
@@ -90,12 +98,12 @@ function activePlayers(game) {
 }
 
 function sendQuestion(game) {
-  const q = questions[game.current];
+  const q = game.questions[game.current];
   game.answers = new Map();
   game.phase = "question";
   io.to(game.code).emit("game:question", {
     index: game.current,
-    total: questions.length,
+    total: game.questions.length,
     text: q.text,
     options: q.options,
   });
@@ -106,7 +114,15 @@ io.on("connection", (socket) => {
 
   socket.on("host:create", (ack) => {
     const code = newCode();
-    const game = { code, host: socket.id, players: new Map(), current: -1, answers: new Map() };
+    const game = {
+      code,
+      host: socket.id,
+      questions: questions.map((q) => ({ ...q })),
+      players: new Map(),
+      current: -1,
+      answers: new Map(),
+    };
+    if (game.questions.length === 0) return ack({ error: "Inga frågor att ställa" });
     games.set(code, game);
     socket.join(code);
     socket.data.code = code;
@@ -146,7 +162,7 @@ io.on("connection", (socket) => {
     if (!game || game.phase !== "question" || !game.players.has(socket.id)) return;
     if (game.answers.has(socket.id)) return; // ett svar per fråga
     option = Number(option);
-    if (!(option >= 0 && option < 4)) return;
+    if (!(option >= 0 && option < game.questions[game.current].options.length)) return;
     game.answers.set(socket.id, option);
     io.to(game.code).emit("game:answered", { answered: game.answers.size, total: activePlayers(game) });
   });
@@ -156,7 +172,7 @@ io.on("connection", (socket) => {
     if (!game) return;
     if (game.phase === "question") return sendResults(game);
     if (game.phase === "results") {
-      if (game.current + 1 < questions.length) {
+      if (game.current + 1 < game.questions.length) {
         game.current++;
         sendQuestion(game);
       } else {

@@ -35,12 +35,91 @@
         <button type="submit">Lägg till fråga</button>
         <span id="formError" class="muted"></span>
       </form>
+      <hr>
+      <button id="createBtn">Starta omröstning</button>
+      <span id="createError" class="muted"></span>
+    </section>
+
+    <section id="lobby" class="hidden">
+      <p class="muted">Scanna eller gå till <strong id="joinUrl"></strong> och ange koden</p>
+      <div class="lobbyRow">
+        <img id="qr" alt="QR-kod" width="240" height="240">
+        <p id="code" class="code">––––</p>
+      </div>
+      <button id="startBtn">Starta första frågan</button>
+    </section>
+
+    <section id="question" class="hidden">
+      <p id="qText"></p>
+      <div id="options" class="options"></div>
+      <p id="answered" class="muted"></p>
+      <button id="nextBtn">Visa resultat</button>
+    </section>
+
+    <section id="leaderboard" class="hidden">
+      <h2 id="boardTitle">Topplista</h2>
+      <ol id="board"></ol>
+      <p id="over" class="hidden"><a href="/admin"><button>Ny omröstning</button></a></p>
     </section>
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    const socket = io();
     const $ = (id) => document.getElementById(id);
+    const show = (...ids) => {
+      for (const s of document.querySelectorAll("main > section")) s.classList.add("hidden");
+      for (const id of ids) $(id).classList.remove("hidden");
+    };
+    const renderBoard = (list) => {
+      $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${p.name} – ${p.score}</li>`).join("");
+    };
+    let code = null;
+
+    $("createBtn").onclick = () => {
+      socket.emit("host:create", (res) => {
+        if (res.error) return ($("createError").textContent = res.error);
+        code = res.code;
+        $("code").textContent = code;
+        $("qr").src = `/qr/${code}`;
+        $("joinUrl").textContent = location.host;
+        show("lobby");
+      });
+    };
+
+    $("startBtn").onclick = () => socket.emit("host:start", { code });
+    $("nextBtn").onclick = () => socket.emit("host:next", { code });
+
+    socket.on("game:question", ({ index, total, text, options }) => {
+      $("qText").textContent = `${index + 1}/${total}: ${text}`;
+      $("options").innerHTML = options.map((o) => `<button disabled>${o}</button>`).join("");
+      $("answered").textContent = "0 svar";
+      $("nextBtn").textContent = "Visa resultat";
+      show("question");
+    });
+
+    socket.on("game:answered", ({ answered, total }) => {
+      $("answered").textContent = `${answered} av ${total} har svarat`;
+    });
+
+    socket.on("game:results", ({ counts, correct, leaderboard }) => {
+      const btns = $("options").querySelectorAll("button");
+      btns.forEach((b, i) => {
+        b.textContent = `${b.textContent} (${counts[i]})`;
+        b.style.opacity = i === correct ? "1" : "0.35";
+        if (i === correct) b.style.outline = "4px solid var(--fg)";
+      });
+      $("nextBtn").textContent = "Nästa fråga";
+      renderBoard(leaderboard);
+      show("question", "leaderboard");
+    });
+
+    socket.on("game:over", ({ leaderboard }) => {
+      $("boardTitle").textContent = "Slutresultat";
+      renderBoard(leaderboard);
+      $("over").classList.remove("hidden");
+      show("leaderboard");
+    });
 
     async function loadQuestions() {
       const qs = await (await fetch("/api/questions")).json();

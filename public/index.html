@@ -43,6 +43,14 @@
     let name = null;
     let myAnswer = null;
 
+    // Kod från QR-länken (/?code=1234) fyller i fältet och döljer det
+    const urlCode = new URLSearchParams(location.search).get("code");
+    if (urlCode) {
+      $("code").value = urlCode;
+      $("code").classList.add("hidden");
+      $("name").focus();
+    }
+
     $("joinBtn").onclick = () => {
       $("error").textContent = "";
       socket.emit("player:join", { code: $("code").value, name: $("name").value }, (res) => {
