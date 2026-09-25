@@ -86,6 +86,16 @@ io.on("connection", (socket) => {
     sendQuestion(game);
   });
 
+  socket.on("player:answer", ({ option } = {}) => {
+    const game = games.get(socket.data.code);
+    if (!game || game.phase !== "question" || !game.players.has(socket.id)) return;
+    if (game.answers.has(socket.id)) return; // ett svar per fråga
+    option = Number(option);
+    if (!(option >= 0 && option < 4)) return;
+    game.answers.set(socket.id, option);
+    io.to(game.code).emit("game:answered", { answered: game.answers.size, total: game.players.size });
+  });
+
   socket.on("disconnect", (reason) => console.log("disconnect", socket.id, reason));
 });
 

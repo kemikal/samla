@@ -56,6 +56,14 @@
       $("options").innerHTML = options.map((o, i) => `<button data-i="${i}">${o}</button>`).join("");
       show("question");
     });
+
+    $("options").onclick = (e) => {
+      const btn = e.target.closest("button[data-i]");
+      if (!btn) return;
+      socket.emit("player:answer", { code, option: Number(btn.dataset.i) });
+      for (const b of $("options").querySelectorAll("button")) b.disabled = true;
+      btn.style.outline = "4px solid var(--fg)";
+    };
   </script>
 </body>
 </html>

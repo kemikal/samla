@@ -59,6 +59,10 @@
       $("answered").textContent = "0 svar";
       show("question");
     });
+
+    socket.on("game:answered", ({ answered, total }) => {
+      $("answered").textContent = `${answered} av ${total} har svarat`;
+    });
   </script>
 </body>
 </html>
