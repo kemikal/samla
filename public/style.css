@@ -62,3 +62,12 @@ button.small { padding: 4px 10px; font-size: 0.85rem; margin-left: 8px; }
 .fill.c1 { background: var(--b); }
 .fill.c2 { background: var(--c); }
 .fill.c3 { background: var(--d); }
+
+/* Sidebar */
+body.admin { flex-direction: row; align-items: flex-start; justify-content: center; gap: 32px; }
+#sidebar { width: 220px; flex-shrink: 0; position: sticky; top: 16px; }
+#sidebar h2 { margin-top: 0; }
+#sidebar ul { list-style: none; padding: 0; margin: 0; }
+#sidebar li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2c2c44; }
+#sidebar li.offline { opacity: 0.4; text-decoration: line-through; }
+@media (max-width: 800px) { body.admin { flex-direction: column; align-items: stretch; } #sidebar { width: auto; position: static; } }

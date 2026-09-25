@@ -63,6 +63,11 @@
     </section>
   </main>
 
+  <aside id="sidebar" class="hidden">
+    <h2>Elever <span id="playerCount" class="muted"></span></h2>
+    <ul id="playerList"></ul>
+  </aside>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -94,9 +99,18 @@
         $("code").textContent = code;
         $("qr").src = `/qr/${code}`;
         $("joinUrl").textContent = location.host;
+        $("sidebar").classList.remove("hidden");
         show("lobby");
       });
     };
+
+    socket.on("game:lobby", ({ players }) => {
+      const online = players.filter((p) => p.connected).length;
+      $("playerCount").textContent = `(${online})`;
+      $("playerList").innerHTML = players.length
+        ? players.map((p) => `<li class="${p.connected ? "" : "offline"}">${p.name}<span class="muted">${p.score}</span></li>`).join("")
+        : `<li class="muted">Inga än</li>`;
+    });
 
     $("startBtn").onclick = () => socket.emit("host:start", { code });
     $("nextBtn").onclick = () => socket.emit("host:next", { code });

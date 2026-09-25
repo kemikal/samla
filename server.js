@@ -62,7 +62,10 @@ function newCode() {
 }
 
 function lobby(game) {
-  return { code: game.code, players: [...game.players.values()].map((p) => p.name) };
+  return {
+    code: game.code,
+    players: [...game.players.values()].map(({ name, score, connected }) => ({ name, score, connected })),
+  };
 }
 
 function hostGame(socket) {
@@ -84,6 +87,7 @@ function sendResults(game) {
   }
   game.phase = "results";
   io.to(game.code).emit("game:results", { counts, correct: q.correct, leaderboard: leaderboard(game) });
+  io.to(game.host).emit("game:lobby", lobby(game));
 }
 
 function endGame(game) {
@@ -201,7 +205,12 @@ io.on("connection", (socket) => {
       io.to(game.code).emit("game:lobby", lobby(game));
     } else {
       player.connected = false;
-      io.to(game.code).emit("game:answered", { answered: game.answers.size, total: activePlayers(game) });
+      io.to(game.code).emit("game:lobby", lobby(game));
+      io.to(game.host).emit("game:answered", {
+        answered: game.answers.size,
+        total: activePlayers(game),
+        counts: game.phase === "question" ? answerCounts(game) : undefined,
+      });
     }
   });
 });
