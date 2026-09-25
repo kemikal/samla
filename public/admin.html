@@ -15,37 +15,57 @@
     </header>
 
     <section id="editor">
-      <h2>Frågor</h2>
-      <ol id="qList"></ol>
-      <form id="qForm">
-        <input name="text" placeholder="Fråga" required autocomplete="off">
-        <label class="optRow noCorrect">
-          <input type="radio" name="correct" value="" checked>
-          <span class="muted">Inget rätt svar (åsiktsomröstning)</span>
+      <div class="sectionHead">
+        <h2>Frågor <span id="qCount" class="muted"></span></h2>
+        <div>
+          <button id="createBtn">Starta omröstning</button>
+          <span id="createError" class="muted"></span>
+        </div>
+      </div>
+      <ol id="qList" class="qList"></ol>
+
+      <form id="qForm" class="card">
+        <h3>Ny fråga</h3>
+        <label class="field">
+          <span>Fråga</span>
+          <input name="text" placeholder="T.ex. Vilket protokoll håller förbindelsen öppen?" required autocomplete="off">
         </label>
-        <div class="optRow">
-          <input type="radio" name="correct" value="0" title="Rätt svar">
-          <input name="o0" placeholder="Alternativ 1" required autocomplete="off">
+
+        <fieldset class="opts">
+          <legend>Svarsalternativ <span class="muted">(2–4 stycken)</span></legend>
+          <div class="optHead"><span>Rätt</span><span></span><span>Alternativ</span></div>
+          <div class="optRow">
+            <input type="radio" name="correct" value="0" aria-label="Alternativ 1 är rätt svar">
+            <span class="swatch c0"></span>
+            <input name="o0" placeholder="Alternativ 1" required autocomplete="off">
+          </div>
+          <div class="optRow">
+            <input type="radio" name="correct" value="1" aria-label="Alternativ 2 är rätt svar">
+            <span class="swatch c1"></span>
+            <input name="o1" placeholder="Alternativ 2" required autocomplete="off">
+          </div>
+          <div class="optRow">
+            <input type="radio" name="correct" value="2" aria-label="Alternativ 3 är rätt svar">
+            <span class="swatch c2"></span>
+            <input name="o2" placeholder="Alternativ 3 (valfritt)" autocomplete="off">
+          </div>
+          <div class="optRow">
+            <input type="radio" name="correct" value="3" aria-label="Alternativ 4 är rätt svar">
+            <span class="swatch c3"></span>
+            <input name="o3" placeholder="Alternativ 4 (valfritt)" autocomplete="off">
+          </div>
+          <label class="optRow none">
+            <input type="radio" name="correct" value="" checked>
+            <span></span>
+            <span>Inget rätt svar – ren åsiktsomröstning utan poäng</span>
+          </label>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit">Lägg till fråga</button>
+          <span id="formError" class="muted"></span>
         </div>
-        <div class="optRow">
-          <input type="radio" name="correct" value="1" title="Rätt svar">
-          <input name="o1" placeholder="Alternativ 2" required autocomplete="off">
-        </div>
-        <div class="optRow">
-          <input type="radio" name="correct" value="2" title="Rätt svar">
-          <input name="o2" placeholder="Alternativ 3 (valfritt)" autocomplete="off">
-        </div>
-        <div class="optRow">
-          <input type="radio" name="correct" value="3" title="Rätt svar">
-          <input name="o3" placeholder="Alternativ 4 (valfritt)" autocomplete="off">
-        </div>
-        <p class="muted">Markera radioknappen vid rätt svar om frågan har ett, annars blir det en ren omröstning.</p>
-        <button type="submit">Lägg till fråga</button>
-        <span id="formError" class="muted"></span>
       </form>
-      <hr>
-      <button id="createBtn">Starta omröstning</button>
-      <span id="createError" class="muted"></span>
     </section>
 
     <section id="lobby" class="hidden">
@@ -203,12 +223,19 @@
       const res = await fetch("/api/questions");
       if (res.status === 401) return location.replace("/login");
       const qs = await res.json();
-      $("qList").innerHTML = qs.map((q) => `
-        <li>
-          <strong>${esc(q.text)}</strong>
-          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${esc(o)}</u>` : esc(o)).join(" · ")}${q.correct === null ? " · <em>omröstning</em>" : ""}</span>
-          <button class="small" data-del="${q.id}">Ta bort</button>
-        </li>`).join("");
+      $("qCount").textContent = `(${qs.length})`;
+      $("qList").innerHTML = qs.length ? qs.map((q, n) => `
+        <li class="card qCard">
+          <div class="qHead">
+            <span class="qNum">${n + 1}</span>
+            <strong class="qTitle">${esc(q.text)}</strong>
+            <span class="tag ${q.correct === null ? "" : "scored"}">${q.correct === null ? "Omröstning" : "Rätt svar"}</span>
+            <button class="small" data-del="${q.id}">Ta bort</button>
+          </div>
+          <ol class="qOpts">${q.options.map((o, i) => `
+            <li class="${i === q.correct ? "correct" : ""}"><span class="swatch c${i}"></span><span>${esc(o)}</span>${i === q.correct ? `<span class="check">✓ rätt</span>` : ""}</li>`).join("")}
+          </ol>
+        </li>`).join("") : `<li class="muted empty">Inga frågor än – lägg till en nedan.</li>`;
     }
 
     $("qList").onclick = async (e) => {

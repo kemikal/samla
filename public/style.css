@@ -42,13 +42,8 @@ button { cursor: pointer; background: var(--fg); color: var(--bg); font-weight: 
 /* Admin */
 .lobbyRow { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
 .lobbyRow img { background: #fff; padding: 8px; border-radius: 8px; }
-hr { border: 0; border-top: 1px solid #333; margin: 24px 0; }
 h2 { font-size: 1.2rem; margin: 24px 0 8px; }
-.optRow { display: flex; gap: 8px; align-items: center; }
-.optRow input[type="radio"] { width: auto; margin: 0 0 8px; }
 button.small { padding: 4px 10px; font-size: 0.85rem; margin-left: 8px; }
-#qList li { margin-bottom: 8px; }
-#qList strong { display: block; }
 
 /* Staplar */
 .bars { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
@@ -72,8 +67,6 @@ body.admin { flex-direction: row; align-items: flex-start; justify-content: cent
 #sidebar li.offline { opacity: 0.4; text-decoration: line-through; }
 @media (max-width: 800px) { body.admin { flex-direction: column; align-items: stretch; } #sidebar { width: auto; position: static; } }
 
-.noCorrect { margin-bottom: 4px; }
-.noCorrect input { margin-bottom: 0; }
 
 /* Inloggning och sidhuvud */
 .topRow { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
@@ -83,3 +76,46 @@ footer { margin-top: 48px; font-size: 0.9rem; }
 a { color: var(--fg); }
 a:has(> button) { text-decoration: none; }
 form p.muted { margin: 8px 0 0; }
+
+/* Frågeeditor */
+.card { background: #24243c; border-radius: 12px; padding: 16px; }
+.sectionHead { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin: 24px 0 12px; }
+.sectionHead h2 { margin: 0; }
+.qList { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 10px; }
+.qList .empty { padding: 8px 0; }
+.qHead { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; }
+.qNum { width: 28px; height: 28px; border-radius: 50%; background: #3a3a5c; display: grid; place-items: center; font-size: 0.85rem; font-weight: 700; }
+.qTitle { font-size: 1.05rem; }
+.tag { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 999px; background: #3a3a5c; color: var(--muted); white-space: nowrap; }
+.tag.scored { background: var(--d); color: var(--fg); }
+.qHead button.small { margin: 0; }
+.qOpts { list-style: none; padding: 0; margin: 10px 0 0 38px; display: grid; gap: 6px; }
+.qOpts li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; color: var(--muted); }
+.qOpts li.correct { color: var(--fg); font-weight: 600; }
+.qOpts .check { font-size: 0.8rem; color: var(--d); font-weight: 700; }
+.swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.swatch.c0 { background: var(--a); } .swatch.c1 { background: var(--b); } .swatch.c2 { background: var(--c); } .swatch.c3 { background: var(--d); }
+
+form.card h3 { margin: 0 0 12px; font-size: 1.1rem; }
+.field { display: block; margin-bottom: 16px; }
+.field > span, .opts legend { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.field input { margin: 0; }
+.opts { border: 0; padding: 0; margin: 0 0 16px; }
+.opts legend { padding: 0; margin-bottom: 10px; }
+.optHead, .optRow { display: grid; grid-template-columns: 36px 14px 1fr; gap: 10px; align-items: center; }
+.optHead { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+.optHead span:first-child { text-align: center; }
+.optRow { margin-bottom: 8px; }
+.optRow input[type="radio"] { width: 18px; height: 18px; margin: 0; justify-self: center; accent-color: var(--d); cursor: pointer; }
+.optRow input:not([type="radio"]) { margin: 0; }
+.optRow.none { margin-top: 12px; cursor: pointer; color: var(--muted); }
+.optRow.none:has(input:checked) { color: var(--fg); }
+.actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .qHead { grid-template-columns: auto 1fr auto; }
+  .qHead .qNum { grid-row: 1; }
+  .qHead .qTitle { grid-column: 2; grid-row: 1; }
+  .qHead button.small { grid-column: 3; grid-row: 1; align-self: start; }
+  .qHead .tag { grid-column: 2; grid-row: 2; justify-self: start; }
+  .qOpts { margin-left: 0; }
+}
