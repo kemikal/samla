@@ -34,6 +34,23 @@ function hostGame(socket) {
   return game && game.host === socket.id ? game : null;
 }
 
+function leaderboard(game) {
+  return [...game.players.values()]
+    .map((p) => ({ name: p.name, score: p.score }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function sendResults(game) {
+  const q = questions[game.current];
+  const counts = [0, 0, 0, 0];
+  for (const [id, option] of game.answers) {
+    counts[option]++;
+    if (option === q.correct) game.players.get(id).score += 1000;
+  }
+  game.phase = "results";
+  io.to(game.code).emit("game:results", { counts, correct: q.correct, leaderboard: leaderboard(game) });
+}
+
 function sendQuestion(game) {
   const q = questions[game.current];
   game.answers = new Map();
@@ -94,6 +111,16 @@ io.on("connection", (socket) => {
     if (!(option >= 0 && option < 4)) return;
     game.answers.set(socket.id, option);
     io.to(game.code).emit("game:answered", { answered: game.answers.size, total: game.players.size });
+  });
+
+  socket.on("host:next", () => {
+    const game = hostGame(socket);
+    if (!game) return;
+    if (game.phase === "question") return sendResults(game);
+    if (game.phase === "results" && game.current + 1 < questions.length) {
+      game.current++;
+      sendQuestion(game);
+    }
   });
 
   socket.on("disconnect", (reason) => console.log("disconnect", socket.id, reason));

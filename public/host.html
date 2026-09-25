@@ -34,9 +34,12 @@
   <script>
     const socket = io();
     const $ = (id) => document.getElementById(id);
-    const show = (id) => {
+    const show = (...ids) => {
       for (const s of document.querySelectorAll("section")) s.classList.add("hidden");
-      $(id).classList.remove("hidden");
+      for (const id of ids) $(id).classList.remove("hidden");
+    };
+    const renderBoard = (list) => {
+      $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${p.name} – ${p.score}</li>`).join("");
     };
     let code = null;
 
@@ -62,6 +65,19 @@
 
     socket.on("game:answered", ({ answered, total }) => {
       $("answered").textContent = `${answered} av ${total} har svarat`;
+    });
+
+    $("nextBtn").onclick = () => socket.emit("host:next", { code });
+
+    socket.on("game:results", ({ counts, correct, leaderboard }) => {
+      const btns = $("options").querySelectorAll("button");
+      btns.forEach((b, i) => {
+        b.textContent = `${b.textContent} (${counts[i]})`;
+        b.style.opacity = i === correct ? "1" : "0.35";
+        if (i === correct) b.style.outline = "4px solid var(--fg)";
+      });
+      renderBoard(leaderboard);
+      show("question", "leaderboard");
     });
   </script>
 </body>

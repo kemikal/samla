@@ -40,12 +40,15 @@
       $(id).classList.remove("hidden");
     };
     let code = null;
+    let name = null;
+    let myAnswer = null;
 
     $("joinBtn").onclick = () => {
       $("error").textContent = "";
       socket.emit("player:join", { code: $("code").value, name: $("name").value }, (res) => {
         if (res.error) return ($("error").textContent = res.error);
         code = $("code").value.trim();
+        name = $("name").value.trim();
         show("wait");
       });
     };
@@ -54,16 +57,26 @@
     socket.on("game:question", ({ index, total, text, options }) => {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
       $("options").innerHTML = options.map((o, i) => `<button data-i="${i}">${o}</button>`).join("");
+      myAnswer = null;
       show("question");
     });
 
     $("options").onclick = (e) => {
       const btn = e.target.closest("button[data-i]");
       if (!btn) return;
-      socket.emit("player:answer", { code, option: Number(btn.dataset.i) });
+      myAnswer = Number(btn.dataset.i);
+      socket.emit("player:answer", { code, option: myAnswer });
       for (const b of $("options").querySelectorAll("button")) b.disabled = true;
       btn.style.outline = "4px solid var(--fg)";
     };
+
+    socket.on("game:results", ({ correct, leaderboard }) => {
+      const me = leaderboard.find((p) => p.name === name);
+      const place = leaderboard.findIndex((p) => p.name === name) + 1;
+      const verdict = myAnswer === null ? "Du svarade inte" : myAnswer === correct ? "Rätt!" : "Fel";
+      $("resultText").textContent = `${verdict} – ${me?.score ?? 0} poäng, plats ${place} av ${leaderboard.length}`;
+      show("result");
+    });
   </script>
 </body>
 </html>
