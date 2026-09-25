@@ -77,6 +77,13 @@
       $("resultText").textContent = `${verdict} – ${me?.score ?? 0} poäng, plats ${place} av ${leaderboard.length}`;
       show("result");
     });
+
+    socket.on("game:over", ({ leaderboard }) => {
+      const me = leaderboard.find((p) => p.name === name);
+      const place = leaderboard.findIndex((p) => p.name === name) + 1;
+      $("resultText").textContent = `Spelet är slut! Du kom på plats ${place} av ${leaderboard.length} med ${me?.score ?? 0} poäng.`;
+      show("result");
+    });
   </script>
 </body>
 </html>

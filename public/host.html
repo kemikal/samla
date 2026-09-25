@@ -25,8 +25,9 @@
     </section>
 
     <section id="leaderboard" class="hidden">
-      <h2>Topplista</h2>
+      <h2 id="boardTitle">Topplista</h2>
       <ol id="board"></ol>
+      <p id="over" class="hidden"><a href="/host.html"><button>Nytt spel</button></a></p>
     </section>
   </main>
 
@@ -78,6 +79,13 @@
       });
       renderBoard(leaderboard);
       show("question", "leaderboard");
+    });
+
+    socket.on("game:over", ({ leaderboard }) => {
+      $("boardTitle").textContent = "Slutresultat";
+      renderBoard(leaderboard);
+      $("over").classList.remove("hidden");
+      show("leaderboard");
     });
   </script>
 </body>

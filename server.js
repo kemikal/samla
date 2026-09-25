@@ -51,6 +51,12 @@ function sendResults(game) {
   io.to(game.code).emit("game:results", { counts, correct: q.correct, leaderboard: leaderboard(game) });
 }
 
+function endGame(game) {
+  io.to(game.code).emit("game:over", { leaderboard: leaderboard(game) });
+  games.delete(game.code);
+  console.log("spel slut", game.code);
+}
+
 function sendQuestion(game) {
   const q = questions[game.current];
   game.answers = new Map();
@@ -117,9 +123,13 @@ io.on("connection", (socket) => {
     const game = hostGame(socket);
     if (!game) return;
     if (game.phase === "question") return sendResults(game);
-    if (game.phase === "results" && game.current + 1 < questions.length) {
-      game.current++;
-      sendQuestion(game);
+    if (game.phase === "results") {
+      if (game.current + 1 < questions.length) {
+        game.current++;
+        sendQuestion(game);
+      } else {
+        endGame(game);
+      }
     }
   });
 
