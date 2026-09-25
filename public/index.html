@@ -110,7 +110,11 @@
       lockAnswer(myAnswer);
     };
 
-    socket.on("game:results", ({ correct, leaderboard }) => {
+    socket.on("game:results", ({ correct, scored, leaderboard }) => {
+      if (correct === null) {
+        $("resultText").textContent = myAnswer === null ? "Du hann inte svara. Väntar på nästa fråga…" : "Tack för ditt svar! Väntar på nästa fråga…";
+        return show("result");
+      }
       const me = leaderboard.find((p) => p.name === name);
       const place = leaderboard.findIndex((p) => p.name === name) + 1;
       const verdict = myAnswer === null ? "Du svarade inte" : myAnswer === correct ? "Rätt!" : "Fel";
@@ -118,10 +122,12 @@
       show("result");
     });
 
-    socket.on("game:over", ({ leaderboard }) => {
+    socket.on("game:over", ({ scored, leaderboard }) => {
       const me = leaderboard.find((p) => p.name === name);
       const place = leaderboard.findIndex((p) => p.name === name) + 1;
-      $("resultText").textContent = `Spelet är slut! Du kom på plats ${place} av ${leaderboard.length} med ${me?.score ?? 0} poäng.`;
+      $("resultText").textContent = scored
+        ? `Spelet är slut! Du kom på plats ${place} av ${leaderboard.length} med ${me?.score ?? 0} poäng.`
+        : "Omröstningen är slut. Tack för att du var med!";
       sessionStorage.removeItem("samla");
       playerId = null;
       show("result");

@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 // Frågebank i minnet, seedad från questions.json. Varje fråga får ett id.
 let nextId = 1;
 const questions = JSON.parse(readFileSync(new URL("./questions.json", import.meta.url)))
-  .map((q) => ({ id: nextId++, ...q }));
+  .map((q) => ({ id: nextId++, correct: null, ...q }));
 
 const app = express();
 const http = createServer(app);
@@ -35,10 +35,12 @@ app.post("/api/questions", (req, res) => {
   const options = (Array.isArray(req.body?.options) ? req.body.options : [])
     .map((o) => String(o ?? "").trim())
     .filter(Boolean);
-  const correct = Number(req.body?.correct);
+  // correct är null för en åsiktsomröstning, annars index i options
+  const raw = req.body?.correct;
+  const correct = raw === null || raw === undefined || raw === "" ? null : Number(raw);
   if (!text) return res.status(400).json({ error: "Frågetext saknas" });
   if (options.length < 2 || options.length > 4) return res.status(400).json({ error: "Ange 2–4 alternativ" });
-  if (!(correct >= 0 && correct < options.length)) return res.status(400).json({ error: "Ogiltigt rätt svar" });
+  if (correct !== null && !(correct >= 0 && correct < options.length)) return res.status(400).json({ error: "Ogiltigt rätt svar" });
   const q = { id: nextId++, text, options, correct };
   questions.push(q);
   res.status(201).json(q);
@@ -86,6 +88,7 @@ function snapshot(game) {
   }
   if (game.phase === "results") {
     snap.correct = game.questions[game.current].correct;
+    snap.scored = scored(game);
     snap.leaderboard = leaderboard(game);
   }
   return snap;
@@ -94,6 +97,11 @@ function snapshot(game) {
 function hostGame(socket) {
   const game = games.get(socket.data.code);
   return game && game.host === socket.id ? game : null;
+}
+
+// Poäng och topplista är bara relevanta om någon fråga har ett rätt svar
+function scored(game) {
+  return game.questions.some((q) => q.correct !== null && q.correct !== undefined);
 }
 
 function leaderboard(game) {
@@ -105,17 +113,24 @@ function leaderboard(game) {
 function sendResults(game) {
   const q = game.questions[game.current];
   const counts = answerCounts(game);
-  for (const [id, option] of game.answers) {
-    if (option === q.correct) game.players.get(id).score += 1000;
+  if (q.correct !== null) {
+    for (const [id, option] of game.answers) {
+      if (option === q.correct) game.players.get(id).score += 1000;
+    }
   }
   game.phase = "results";
-  io.to(game.code).emit("game:results", { counts, correct: q.correct, leaderboard: leaderboard(game) });
+  io.to(game.code).emit("game:results", {
+    counts,
+    correct: q.correct,
+    scored: scored(game),
+    leaderboard: leaderboard(game),
+  });
   toHost(game, "game:lobby", lobby(game));
 }
 
 function endGame(game) {
   clearTimeout(game.hostTimer);
-  io.to(game.code).emit("game:over", { leaderboard: leaderboard(game) });
+  io.to(game.code).emit("game:over", { scored: scored(game), leaderboard: leaderboard(game) });
   games.delete(game.code);
   console.log("spel slut", game.code);
 }

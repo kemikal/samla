@@ -16,8 +16,12 @@
       <ol id="qList"></ol>
       <form id="qForm">
         <input name="text" placeholder="Fråga" required autocomplete="off">
+        <label class="optRow noCorrect">
+          <input type="radio" name="correct" value="" checked>
+          <span class="muted">Inget rätt svar (åsiktsomröstning)</span>
+        </label>
         <div class="optRow">
-          <input type="radio" name="correct" value="0" checked title="Rätt svar">
+          <input type="radio" name="correct" value="0" title="Rätt svar">
           <input name="o0" placeholder="Alternativ 1" required autocomplete="off">
         </div>
         <div class="optRow">
@@ -32,7 +36,7 @@
           <input type="radio" name="correct" value="3" title="Rätt svar">
           <input name="o3" placeholder="Alternativ 4 (valfritt)" autocomplete="off">
         </div>
-        <p class="muted">Markera radioknappen vid rätt svar.</p>
+        <p class="muted">Markera radioknappen vid rätt svar om frågan har ett, annars blir det en ren omröstning.</p>
         <button type="submit">Lägg till fråga</button>
         <span id="formError" class="muted"></span>
       </form>
@@ -133,11 +137,11 @@
     }
     socket.on("game:question", showQuestion);
 
-    function showResults({ counts, correct, leaderboard }) {
+    function showResults({ counts, correct, scored, leaderboard }) {
       renderBars(counts, correct);
       $("nextBtn").textContent = "Nästa fråga";
       renderBoard(leaderboard);
-      show("question", "leaderboard");
+      show("question", ...(scored ? ["leaderboard"] : []));
     }
     socket.on("game:results", showResults);
 
@@ -170,10 +174,10 @@
       if (counts) renderBars(counts);
     });
 
-    socket.on("game:over", ({ leaderboard }) => {
+    socket.on("game:over", ({ scored, leaderboard }) => {
       clearSession();
-      $("boardTitle").textContent = "Slutresultat";
-      renderBoard(leaderboard);
+      $("boardTitle").textContent = scored ? "Slutresultat" : "Omröstningen är slut";
+      renderBoard(scored ? leaderboard : []);
       $("over").classList.remove("hidden");
       show("leaderboard");
     });
@@ -183,7 +187,7 @@
       $("qList").innerHTML = qs.map((q) => `
         <li>
           <strong>${q.text}</strong>
-          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${o}</u>` : o).join(" · ")}</span>
+          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${o}</u>` : o).join(" · ")}${q.correct === null ? " · <em>omröstning</em>" : ""}</span>
           <button class="small" data-del="${q.id}">Ta bort</button>
         </li>`).join("");
     }
@@ -202,7 +206,7 @@
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: f.get("text"), options, correct: Number(f.get("correct")) }),
+        body: JSON.stringify({ text: f.get("text"), options, correct: f.get("correct") === "" ? null : Number(f.get("correct")) }),
       });
       if (!res.ok) return ($("formError").textContent = (await res.json()).error);
       $("formError").textContent = "";
