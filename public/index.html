@@ -50,6 +50,12 @@
       });
     };
     $("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click();
+
+    socket.on("game:question", ({ index, total, text, options }) => {
+      $("qText").textContent = `${index + 1}/${total}: ${text}`;
+      $("options").innerHTML = options.map((o, i) => `<button data-i="${i}">${o}</button>`).join("");
+      show("question");
+    });
   </script>
 </body>
 </html>

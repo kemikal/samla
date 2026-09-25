@@ -50,6 +50,15 @@
         ? `${players.length} spelare: ${players.join(", ")}`
         : "Inga spelare än";
     });
+
+    $("startBtn").onclick = () => socket.emit("host:start", { code });
+
+    socket.on("game:question", ({ index, total, text, options }) => {
+      $("qText").textContent = `${index + 1}/${total}: ${text}`;
+      $("options").innerHTML = options.map((o) => `<button disabled>${o}</button>`).join("");
+      $("answered").textContent = "0 svar";
+      show("question");
+    });
   </script>
 </body>
 </html>

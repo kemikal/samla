@@ -29,6 +29,23 @@ function lobby(game) {
   return { code: game.code, players: [...game.players.values()].map((p) => p.name) };
 }
 
+function hostGame(socket) {
+  const game = games.get(socket.data.code);
+  return game && game.host === socket.id ? game : null;
+}
+
+function sendQuestion(game) {
+  const q = questions[game.current];
+  game.answers = new Map();
+  game.phase = "question";
+  io.to(game.code).emit("game:question", {
+    index: game.current,
+    total: questions.length,
+    text: q.text,
+    options: q.options,
+  });
+}
+
 io.on("connection", (socket) => {
   console.log("connect", socket.id);
 
@@ -59,6 +76,14 @@ io.on("connection", (socket) => {
     console.log("spelare", name, "->", game.code);
     ack({ ok: true });
     io.to(game.code).emit("game:lobby", lobby(game));
+  });
+
+  socket.on("host:start", () => {
+    const game = hostGame(socket);
+    if (!game || game.current >= 0) return;
+    game.current = 0;
+    console.log("spel startat", game.code);
+    sendQuestion(game);
   });
 
   socket.on("disconnect", (reason) => console.log("disconnect", socket.id, reason));
