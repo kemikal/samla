@@ -38,3 +38,11 @@ button { cursor: pointer; background: var(--fg); color: var(--bg); font-weight: 
 .options button:nth-child(4) { background: var(--d); }
 .code { font-size: 4rem; letter-spacing: 0.2em; font-weight: 700; }
 .hidden { display: none; }
+
+/* Admin */
+h2 { font-size: 1.2rem; margin: 24px 0 8px; }
+.optRow { display: flex; gap: 8px; align-items: center; }
+.optRow input[type="radio"] { width: auto; margin: 0 0 8px; }
+button.small { padding: 4px 10px; font-size: 0.85rem; margin-left: 8px; }
+#qList li { margin-bottom: 8px; }
+#qList strong { display: block; }

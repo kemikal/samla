@@ -4,13 +4,41 @@ import { Server } from "socket.io";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const questions = JSON.parse(readFileSync(new URL("./questions.json", import.meta.url)));
+// Frågebank i minnet, seedad från questions.json. Varje fråga får ett id.
+let nextId = 1;
+const questions = JSON.parse(readFileSync(new URL("./questions.json", import.meta.url)))
+  .map((q) => ({ id: nextId++, ...q }));
 
 const app = express();
 const http = createServer(app);
 const io = new Server(http);
 
-app.use(express.static(fileURLToPath(new URL("./public", import.meta.url))));
+const publicDir = fileURLToPath(new URL("./public", import.meta.url));
+app.use(express.json());
+app.use(express.static(publicDir));
+app.get("/admin", (_req, res) => res.sendFile("admin.html", { root: publicDir }));
+
+// REST-API för frågebanken
+app.get("/api/questions", (_req, res) => res.json(questions));
+app.post("/api/questions", (req, res) => {
+  const text = String(req.body?.text ?? "").trim();
+  const options = (Array.isArray(req.body?.options) ? req.body.options : [])
+    .map((o) => String(o ?? "").trim())
+    .filter(Boolean);
+  const correct = Number(req.body?.correct);
+  if (!text) return res.status(400).json({ error: "Frågetext saknas" });
+  if (options.length < 2 || options.length > 4) return res.status(400).json({ error: "Ange 2–4 alternativ" });
+  if (!(correct >= 0 && correct < options.length)) return res.status(400).json({ error: "Ogiltigt rätt svar" });
+  const q = { id: nextId++, text, options, correct };
+  questions.push(q);
+  res.status(201).json(q);
+});
+app.delete("/api/questions/:id", (req, res) => {
+  const i = questions.findIndex((q) => q.id === Number(req.params.id));
+  if (i < 0) return res.status(404).json({ error: "Finns inte" });
+  questions.splice(i, 1);
+  res.status(204).end();
+});
 app.get("/health", (_req, res) =>
   res.json({ ok: true, clients: io.engine.clientsCount, questions: questions.length })
 );

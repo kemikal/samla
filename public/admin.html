@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Samla – admin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="admin">
+  <main>
+    <h1>Samla <span class="muted">admin</span></h1>
+
+    <section id="editor">
+      <h2>Frågor</h2>
+      <ol id="qList"></ol>
+      <form id="qForm">
+        <input name="text" placeholder="Fråga" required autocomplete="off">
+        <div class="optRow">
+          <input type="radio" name="correct" value="0" checked title="Rätt svar">
+          <input name="o0" placeholder="Alternativ 1" required autocomplete="off">
+        </div>
+        <div class="optRow">
+          <input type="radio" name="correct" value="1" title="Rätt svar">
+          <input name="o1" placeholder="Alternativ 2" required autocomplete="off">
+        </div>
+        <div class="optRow">
+          <input type="radio" name="correct" value="2" title="Rätt svar">
+          <input name="o2" placeholder="Alternativ 3 (valfritt)" autocomplete="off">
+        </div>
+        <div class="optRow">
+          <input type="radio" name="correct" value="3" title="Rätt svar">
+          <input name="o3" placeholder="Alternativ 4 (valfritt)" autocomplete="off">
+        </div>
+        <p class="muted">Markera radioknappen vid rätt svar.</p>
+        <button type="submit">Lägg till fråga</button>
+        <span id="formError" class="muted"></span>
+      </form>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    async function loadQuestions() {
+      const qs = await (await fetch("/api/questions")).json();
+      $("qList").innerHTML = qs.map((q) => `
+        <li>
+          <strong>${q.text}</strong>
+          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${o}</u>` : o).join(" · ")}</span>
+          <button class="small" data-del="${q.id}">Ta bort</button>
+        </li>`).join("");
+    }
+
+    $("qList").onclick = async (e) => {
+      const btn = e.target.closest("button[data-del]");
+      if (!btn) return;
+      await fetch(`/api/questions/${btn.dataset.del}`, { method: "DELETE" });
+      loadQuestions();
+    };
+
+    $("qForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const options = ["o0", "o1", "o2", "o3"].map((k) => f.get(k).trim()).filter(Boolean);
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: f.get("text"), options, correct: Number(f.get("correct")) }),
+      });
+      if (!res.ok) return ($("formError").textContent = (await res.json()).error);
+      $("formError").textContent = "";
+      e.target.reset();
+      loadQuestions();
+    };
+
+    loadQuestions();
+  </script>
+</body>
+</html>
