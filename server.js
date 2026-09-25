@@ -229,6 +229,13 @@ io.on("connection", (socket) => {
     }
     ack({ ok: true, name: player.name, playerId, state });
     io.to(game.code).emit("game:lobby", lobby(game));
+    if (game.current >= 0) {
+      toHost(game, "game:answered", {
+        answered: game.answers.size,
+        total: activePlayers(game),
+        counts: game.phase === "question" ? answerCounts(game) : undefined,
+      });
+    }
   });
 
   socket.on("host:start", () => {

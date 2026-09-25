@@ -28,20 +28,32 @@ public/style.css   Delad stil
 2. Starta omröstning → `host:create` → spelet får en ögonblicksbild av frågebanken och en 4-siffrig kod.
    Admin visar koden och en QR-kod (`/qr/:code`) som leder till `/?code=1234`.
 3. Elever scannar, skriver namn → `player:join` → dyker upp i admin-sidebaren via `game:lobby`.
+   Servern ger ett `playerId` som klienten sparar i sessionStorage. Vid tappad förbindelse eller
+   sidladdning skickas join igen med samma id och eleven får tillbaka sitt namn, sin poäng och
+   aktuell fråga. Sen anslutning är tillåten. Dubblettnamn får suffix ("Anna 2").
 4. Starta första frågan → `game:question` till rummet.
 5. Elever svarar → `player:answer`. Admin får `game:answered` med `counts` och ritar staplar live.
    Spelarna får bara `answered/total`, aldrig fördelningen.
 6. Visa resultat → `game:results` (fördelning, rätt svar, topplista). Nästa fråga → steg 4.
 7. Efter sista frågan → `game:over` med slutresultat. Spelet tas bort.
 
-Poäng: 1000 för rätt svar, 0 för fel. Ingen tidsbonus, ingen timer. Ingen inloggning på `/admin`.
+Värden får en `hostKey` vid `host:create` (sparas i sessionStorage). Vid reconnect skickas
+`host:resume` och servern svarar med en ögonblicksbild av läget. Spelet avslutas först om
+värden varit borta i 60 sekunder.
+
+Frågor kan sakna rätt svar (`correct: null`) – då är det en åsiktsomröstning utan poäng.
+Poäng: 1000 för rätt svar. Topplista visas bara om spelet har minst en fråga med rätt svar.
+Ingen timer. Ingen inloggning på `/admin`.
+
+Admin visar svarsfördelningen som staplar eller cirkeldiagram (inline-SVG, valet sparas i
+localStorage). Färgerna i `:root` är validerade för färgblindhet mot den mörka bakgrunden.
 
 ## REST-API
 
 | Metod  | Sökväg               | Body / svar                                  |
 |--------|----------------------|----------------------------------------------|
 | GET    | `/api/questions`     | `[{ id, text, options, correct }]`           |
-| POST   | `/api/questions`     | `{ text, options[2..4], correct }` → 201     |
+| POST   | `/api/questions`     | `{ text, options[2..4], correct: index|null }` → 201 |
 | DELETE | `/api/questions/:id` | 204                                          |
 | GET    | `/qr/:code`          | SVG med länk till `/?code=`                  |
 
@@ -51,10 +63,11 @@ Klient → server (ack används där svaret behövs direkt):
 
 | Event           | Payload                  | Ack                          |
 |-----------------|--------------------------|------------------------------|
-| `host:create`   | –                        | `{ code }` eller `{ error }` |
+| `host:create`   | –                        | `{ code, hostKey }` eller `{ error }` |
+| `host:resume`   | `{ code, hostKey }`      | `{ ok, code, state }` eller `{ error }` |
 | `host:start`    | `{ code }`               | –                            |
 | `host:next`     | `{ code }`               | –                            |
-| `player:join`   | `{ code, name }`         | `{ ok }` eller `{ error }`   |
+| `player:join`   | `{ code, name, playerId? }` | `{ ok, name, playerId, state }` eller `{ error }` |
 | `player:answer` | `{ code, option }`       | –                            |
 
 Server → klient (till rummet `code`):
@@ -64,8 +77,8 @@ Server → klient (till rummet `code`):
 | `game:lobby`    | `{ code, players: [{ name, score, connected }] }`          |
 | `game:question` | `{ index, total, text, options }` (aldrig `correct`)       |
 | `game:answered` | `{ answered, total }` till spelare, `+ counts` till värden |
-| `game:results`  | `{ counts, correct, leaderboard: [{name,score}] }`         |
-| `game:over`     | `{ leaderboard }`                                          |
+| `game:results`  | `{ counts, correct, scored, leaderboard: [{name,score}] }` |
+| `game:over`     | `{ scored, leaderboard }`                                  |
 
 Regler: värden ligger i rummet men markeras som `host`, aldrig i `players`.
 Skicka aldrig rätt svar till spelare innan `game:results`.
@@ -89,6 +102,14 @@ scp -r . spnrck.spinnrock.com:/home/spnrck/scratch/samla/   # exkl. node_modules
 ssh spnrck.spinnrock.com 'cd /home/spnrck/scratch/samla && docker build -t samla . && docker rm -f samla; docker run -d --name samla --network webnet --restart unless-stopped samla'
 curl -I https://samla.spinnrock.com/    # 200 = uppe, 302 → www = containern svarar inte
 ```
+
+## Lärdomar från lektionen 2026-09-25
+
+- `el.onkeydown = (e) => e.key === "Enter" && ...` blockerade all inmatning: ett `false` från en
+  `on*`-egenskap avbryter händelsen. Skriv `if (...)` i stället. Playwright `fill()` går inte via
+  keydown, så testa inmatning med `keyboard.type()`.
+- Mobiler tappar socketen så fort skärmen släcks. Allt som identifierar en elev måste överleva
+  ett nytt socket-id.
 
 ## Arbetssätt
 
