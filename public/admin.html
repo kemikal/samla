@@ -31,7 +31,15 @@
           <input name="text" placeholder="T.ex. Vilket protokoll håller förbindelsen öppen?" required autocomplete="off">
         </label>
 
-        <fieldset class="opts">
+        <fieldset class="qType">
+          <legend>Svarstyp</legend>
+          <label><input type="radio" name="type" value="choice" checked> Flerval</label>
+          <label><input type="radio" name="type" value="text"> Fritext <span class="muted">(1–3 ord)</span></label>
+        </fieldset>
+
+        <p id="textHint" class="muted hidden">Eleverna skriver ett kort svar på högst tre ord. Svaren visas som ett ordmoln där vanliga svar blir större.</p>
+
+        <fieldset class="opts" id="optsFieldset">
           <legend>Svarsalternativ <span class="muted">(2–4 stycken)</span></legend>
           <div class="optHead"><span>Rätt</span><span></span><span>Alternativ</span></div>
           <div class="optRow">
@@ -111,6 +119,7 @@
     let code = null;
     let hostKey = null;
     let options = [];
+    let qType = "choice";
 
     const saveSession = () => sessionStorage.setItem("samla-host", JSON.stringify({ code, hostKey }));
     const clearSession = () => { sessionStorage.removeItem("samla-host"); code = hostKey = null; };
@@ -127,15 +136,60 @@
     const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
     const cls = (i, correct) => (correct === null || correct === undefined ? "" : i === correct ? "correct" : "wrong");
 
-    function renderChart(counts, correct) {
-      const total = counts.reduce((a, b) => a + b, 0);
-      const max = Math.max(1, ...counts);
-      $("chart").innerHTML = `<div class="bars">${options.map((o, i) => `
+    // rows: [{ label, count, color }], correct: index i rows eller null
+    function bars(rows, correct) {
+      const total = rows.reduce((a, r) => a + r.count, 0);
+      const max = Math.max(1, ...rows.map((r) => r.count));
+      return `<div class="bars">${rows.map((r, i) => `
         <div class="bar ${cls(i, correct)}">
-          <span class="label">${esc(o)}</span>
-          <span class="track"><span class="fill c${i}" style="width:${(counts[i] / max) * 100}%"></span></span>
-          <span class="count">${counts[i]} <small class="muted">${pct(counts[i], total)}%</small></span>
+          <span class="label">${esc(r.label)}</span>
+          <span class="track"><span class="fill ${r.color}" style="width:${(r.count / max) * 100}%"></span></span>
+          <span class="count">${r.count} <small class="muted">${pct(r.count, total)}%</small></span>
         </div>`).join("")}</div>`;
+    }
+
+    // Klassiskt ordmoln: storlek efter antal, orden läggs ut längs en spiral från mitten
+    // tills de får plats utan att överlappa. Ritas som inline-SVG, mäts med canvas.
+    const measure = document.createElement("canvas").getContext("2d");
+    function renderCloud(answers) {
+      const W = 720, H = 400, PAD = 6;
+      const words = answers.slice(0, 60);
+      const counts = words.map((a) => a.count);
+      const lo = Math.sqrt(Math.min(...counts)), hi = Math.sqrt(Math.max(...counts));
+      const size = (c) => (hi === lo ? 40 : 18 + ((Math.sqrt(c) - lo) / (hi - lo)) * 50);
+      const placed = [];
+      const out = [];
+      words.forEach((a, i) => {
+        const fs = size(a.count);
+        measure.font = `700 ${fs}px system-ui, sans-serif`;
+        const w = measure.measureText(a.text).width + PAD * 2, h = fs * 1.15 + PAD;
+        for (let t = 0; t < 4000; t++) {
+          const ang = t * 0.12, rad = ang * 1.6;
+          const cx = W / 2 + rad * Math.cos(ang), cy = H / 2 + rad * Math.sin(ang) * 0.65;
+          const box = { x: cx - w / 2, y: cy - h / 2, w, h };
+          if (box.x < 0 || box.y < 0 || box.x + w > W || box.y + h > H) continue;
+          if (placed.some((p) => box.x < p.x + p.w && box.x + w > p.x && box.y < p.y + p.h && box.y + h > p.y)) continue;
+          placed.push(box);
+          out.push(`<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="${fs.toFixed(1)}" class="w${i % 4}"><title>${esc(a.text)}: ${a.count}</title>${esc(a.text)}</text>`);
+          break;
+        }
+      });
+      // Vyn klipps till ordens utbredning så att molnet fyller ytan även med få svar
+      const x0 = Math.min(...placed.map((p) => p.x)) - PAD, y0 = Math.min(...placed.map((p) => p.y)) - PAD;
+      const x1 = Math.max(...placed.map((p) => p.x + p.w)) + PAD, y1 = Math.max(...placed.map((p) => p.y + p.h)) + PAD;
+      return `<svg class="cloud" viewBox="${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1 - x0).toFixed(0)} ${(y1 - y0).toFixed(0)}" role="img" aria-label="Ordmoln över svaren">${out.join("")}</svg>`;
+    }
+
+    // Flerval: en stapel per alternativ (counts). Fritext: ordmoln över unika svar (answers) med antal under.
+    function renderChart({ counts, answers } = {}, correct = null) {
+      if (qType === "text") {
+        const all = answers ?? [];
+        $("chart").innerHTML = all.length
+          ? renderCloud(all) + `<p class="cloudList muted">${all.slice(0, 10).map((a) => `${esc(a.text)} <b>×${a.count}</b>`).join(" · ")}${all.length > 10 ? ` · … ${all.length - 10} till` : ""}</p>`
+          : `<p class="muted chartEmpty">Inga svar än</p>`;
+      } else {
+        $("chart").innerHTML = bars(options.map((o, i) => ({ label: o, count: counts?.[i] ?? 0, color: `c${i}` })), correct);
+      }
     }
 
     $("createBtn").onclick = () => {
@@ -164,18 +218,19 @@
     $("startBtn").onclick = () => socket.emit("host:start", { code });
     $("nextBtn").onclick = () => socket.emit("host:next", { code });
 
-    function showQuestion({ index, total, text, options: opts }) {
+    function showQuestion({ index, total, type, text, options: opts }) {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
       options = opts;
-      renderChart(options.map(() => 0), null);
+      qType = type ?? "choice";
+      renderChart({}, null);
       $("answered").textContent = "0 svar";
       $("nextBtn").textContent = "Visa resultat";
       show("question");
     }
     socket.on("game:question", showQuestion);
 
-    function showResults({ counts, correct, scored, leaderboard }) {
-      renderChart(counts, correct);
+    function showResults({ counts, answers, correct, scored, leaderboard }) {
+      renderChart({ counts, answers }, correct);
       $("nextBtn").textContent = "Nästa fråga";
       renderBoard(leaderboard);
       show("question", ...(scored ? ["leaderboard"] : []));
@@ -199,16 +254,16 @@
         showQuestion(st.question);
         if (st.phase === "question") {
           $("answered").textContent = `${st.answered} av ${st.total} har svarat`;
-          renderChart(st.counts, null);
+          renderChart(st, null);
         } else {
           showResults(st);
         }
       });
     });
 
-    socket.on("game:answered", ({ answered, total, counts }) => {
+    socket.on("game:answered", ({ answered, total, counts, answers }) => {
       $("answered").textContent = `${answered} av ${total} har svarat`;
-      if (counts) renderChart(counts, null);
+      if (counts || answers) renderChart({ counts, answers }, null);
     });
 
     socket.on("game:over", ({ scored, leaderboard }) => {
@@ -229,12 +284,12 @@
           <div class="qHead">
             <span class="qNum">${n + 1}</span>
             <strong class="qTitle">${esc(q.text)}</strong>
-            <span class="tag ${q.correct === null ? "" : "scored"}">${q.correct === null ? "Omröstning" : "Rätt svar"}</span>
+            <span class="tag ${q.correct === null ? "" : "scored"}">${q.type === "text" ? "Fritext" : q.correct === null ? "Omröstning" : "Rätt svar"}</span>
             <button class="small" data-del="${q.id}">Ta bort</button>
           </div>
-          <ol class="qOpts">${q.options.map((o, i) => `
+          ${q.type === "text" ? `<p class="qOpts muted">Eleverna skriver ett svar på 1–3 ord</p>` : `<ol class="qOpts">${q.options.map((o, i) => `
             <li class="${i === q.correct ? "correct" : ""}"><span class="swatch c${i}"></span><span>${esc(o)}</span>${i === q.correct ? `<span class="check">✓ rätt</span>` : ""}</li>`).join("")}
-          </ol>
+          </ol>`}
         </li>`).join("") : `<li class="muted empty">Inga frågor än – lägg till en nedan.</li>`;
     }
 
@@ -245,14 +300,26 @@
       loadQuestions();
     };
 
+    // Fritext har inga alternativ: fältgruppen inaktiveras så att required inte stoppar formuläret
+    function applyType() {
+      const isText = $("qForm").type.value === "text";
+      $("optsFieldset").disabled = isText;
+      $("optsFieldset").classList.toggle("hidden", isText);
+      $("textHint").classList.toggle("hidden", !isText);
+    }
+    $("qForm").addEventListener("change", (e) => { if (e.target.name === "type") applyType(); });
+    $("qForm").addEventListener("reset", () => setTimeout(applyType));
+
     $("qForm").onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
-      const options = ["o0", "o1", "o2", "o3"].map((k) => f.get(k).trim()).filter(Boolean);
+      const type = f.get("type");
+      const options = type === "text" ? [] : ["o0", "o1", "o2", "o3"].map((k) => (f.get(k) ?? "").trim()).filter(Boolean);
+      const correct = type === "text" || f.get("correct") === "" || f.get("correct") === null ? null : Number(f.get("correct"));
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: f.get("text"), options, correct: f.get("correct") === "" ? null : Number(f.get("correct")) }),
+        body: JSON.stringify({ type, text: f.get("text"), options, correct }),
       });
       if (!res.ok) return ($("formError").textContent = (await res.json()).error);
       $("formError").textContent = "";

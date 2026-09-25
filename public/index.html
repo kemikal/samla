@@ -57,15 +57,34 @@
       $("code").classList.add("hidden");
     }
 
-    function renderQuestion({ index, total, text, options }) {
+    let qType = "choice";
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    function renderQuestion({ index, total, type, text, options }) {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
-      $("options").innerHTML = options.map((o, i) => `<button data-i="${i}">${o}</button>`).join("");
+      qType = type ?? "choice";
+      $("options").className = qType === "text" ? "" : "options";
+      $("options").innerHTML = qType === "text"
+        ? `<form class="answerForm" id="answerForm">
+             <input id="answerInput" placeholder="Skriv 1–3 ord" maxlength="40" autocomplete="off" autofocus>
+             <button type="submit">Svara</button>
+           </form>
+           <p id="answerMsg" class="muted"></p>`
+        : options.map((o, i) => `<button data-i="${i}">${esc(o)}</button>`).join("");
       show("question");
     }
 
-    function lockAnswer(i) {
+    // Låser svaret: markerar valt alternativ, eller visar det skrivna svaret
+    function lockAnswer(answer) {
+      if (qType === "text") {
+        $("answerInput").value = answer;
+        $("answerInput").disabled = true;
+        $("answerForm").querySelector("button").disabled = true;
+        $("answerMsg").textContent = "Ditt svar är skickat. Väntar på resultatet…";
+        return;
+      }
       for (const b of $("options").querySelectorAll("button")) b.disabled = true;
-      const btn = $("options").querySelector(`button[data-i="${i}"]`);
+      const btn = $("options").querySelector(`button[data-i="${answer}"]`);
       if (btn) btn.style.outline = "4px solid var(--fg)";
     }
 
@@ -112,6 +131,18 @@
       myAnswer = Number(btn.dataset.i);
       socket.emit("player:answer", { code, option: myAnswer });
       lockAnswer(myAnswer);
+    };
+
+    // Fritext: servern städar svaret och säger ifrån om det är för långt
+    $("options").onsubmit = (e) => {
+      e.preventDefault();
+      const text = $("answerInput").value.trim();
+      if (!text) return;
+      socket.emit("player:answer", { code, text }, (res) => {
+        if (res.error) return ($("answerMsg").textContent = res.error);
+        myAnswer = res.answer;
+        lockAnswer(myAnswer);
+      });
     };
 
     socket.on("game:results", ({ correct, scored, leaderboard }) => {

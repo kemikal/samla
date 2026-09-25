@@ -48,5 +48,11 @@
       "Hub"
     ],
     "correct": 0
+  },
+  {
+    "type": "text",
+    "text": "Beskriv dagens lektion med ett ord",
+    "options": [],
+    "correct": null
   }
 ]

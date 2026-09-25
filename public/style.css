@@ -119,3 +119,23 @@ form.card h3 { margin: 0 0 12px; font-size: 1.1rem; }
   .qHead .tag { grid-column: 2; grid-row: 2; justify-self: start; }
   .qOpts { margin-left: 0; }
 }
+
+/* Fritextfrågor */
+.qType { border: 0; padding: 0; margin: 0 0 16px; display: flex; gap: 20px; flex-wrap: wrap; }
+.qType legend { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.qType label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.qType input { width: 18px; height: 18px; margin: 0; accent-color: var(--d); }
+#textHint { margin: 0 0 16px; }
+.fill.ct { background: var(--b); }
+.chartEmpty { margin: 16px 0; }
+.answerForm { display: flex; gap: 8px; }
+.answerForm input { margin: 0; font-size: 1.2rem; }
+.answerForm button { white-space: nowrap; }
+
+/* Ordmoln */
+.cloud { width: 100%; max-height: 380px; margin: 8px 0; display: block; }
+.cloud text { font-family: system-ui, sans-serif; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.cloud .w0 { fill: var(--a); } .cloud .w1 { fill: var(--b); } .cloud .w2 { fill: var(--c); } .cloud .w3 { fill: var(--d); }
+.cloudList { margin: 0 0 8px; font-size: 0.95rem; }
+.cloudList b { color: var(--fg); }
+.answerForm input:disabled { background: #2c2c44; color: var(--fg); opacity: 1; }

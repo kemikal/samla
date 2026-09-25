@@ -62,8 +62,17 @@ Frågor kan sakna rätt svar (`correct: null`) – då är det en åsiktsomröst
 Poäng: 1000 för rätt svar. Topplista visas bara om spelet har minst en fråga med rätt svar.
 Ingen timer.
 
-Svarsfördelningen visas som staplar med antal och procent. Cirkeldiagrammet från lektionen är
-borttaget. Färgerna i `:root` är validerade för färgblindhet mot den mörka bakgrunden.
+Två frågetyper (`type`): `choice` (2–4 alternativ, valfritt rätt svar) och `text` (fritext).
+Frågor utan `type` i äldre data behandlas som `choice`.
+
+- Flerval: spelaren skickar `{ option }`, värden får `counts` och ritar staplar med antal och procent.
+- Fritext: spelaren skriver 1–3 ord (max 40 tecken, servern städar mellanslag och nekar längre svar
+  via ack). Värden får `answers: [{ text, count }]` grupperade skiftlägesokänsligt, vanligaste först,
+  och ritar ett ordmoln (inline-SVG, spiralutläggning utan bibliotek, storlek ∝ √antal) med en
+  antalslista under. Fritext ger aldrig poäng.
+
+Cirkeldiagrammet från lektionen är borttaget. Färgerna i `:root` är validerade för färgblindhet
+mot den mörka bakgrunden.
 
 ## REST-API
 
@@ -74,7 +83,7 @@ borttaget. Färgerna i `:root` är validerade för färgblindhet mot den mörka 
 | POST   | `/api/logout`        | `{ ok }`                                     |
 | GET    | `/api/me`            | `{ email }` (401 utan session)               |
 | GET    | `/api/questions`     | `[{ id, text, options, correct }]` för kontot |
-| POST   | `/api/questions`     | `{ text, options[2..4], correct: index|null }` → 201 |
+| POST   | `/api/questions`     | `{ type: "choice", text, options[2..4], correct: index|null }` eller `{ type: "text", text }` → 201 |
 | DELETE | `/api/questions/:id` | 204                                          |
 | GET    | `/qr/:code`          | SVG med länk till `/?code=`                  |
 | GET    | `/health`            | `{ ok, clients, accounts, games, mail }`     |
@@ -90,16 +99,16 @@ Klient → server (ack används där svaret behövs direkt):
 | `host:start`    | `{ code }`               | –                            |
 | `host:next`     | `{ code }`               | –                            |
 | `player:join`   | `{ code, name, playerId? }` | `{ ok, name, playerId, state }` eller `{ error }` |
-| `player:answer` | `{ code, option }`       | –                            |
+| `player:answer` | `{ option }` eller `{ text }` | `{ ok, answer }` eller `{ error }` (valfritt) |
 
 Server → klient (till rummet `code`):
 
 | Event           | Payload                                                    |
 |-----------------|------------------------------------------------------------|
 | `game:lobby`    | `{ code, players: [{ name, score, connected }] }`          |
-| `game:question` | `{ index, total, text, options }` (aldrig `correct`)       |
-| `game:answered` | `{ answered, total }` till spelare, `+ counts` till värden |
-| `game:results`  | `{ counts, correct, scored, leaderboard: [{name,score}] }` |
+| `game:question` | `{ index, total, type, text, options }` (aldrig `correct`) |
+| `game:answered` | `{ answered, total }` till spelare, `+ counts` (flerval) eller `answers` (fritext) till värden |
+| `game:results`  | `{ counts | answers, correct, scored, leaderboard: [{name,score}] }` |
 | `game:over`     | `{ scored, leaderboard }`                                  |
 
 Regler: värden ligger i rummet men markeras som `host`, aldrig i `players`.

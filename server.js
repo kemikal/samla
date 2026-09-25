@@ -21,6 +21,7 @@ const db = existsSync(DATA_FILE)
   : { accounts: {}, sessions: {} };
 
 function save() {
+  mkdirSync(DATA_DIR, { recursive: true }); // mappen kan ha försvunnit under körning
   const tmp = `${DATA_FILE}.tmp`;
   writeFileSync(tmp, JSON.stringify(db, null, 2));
   renameSync(tmp, DATA_FILE);
@@ -184,17 +185,23 @@ app.get("/qr/:code", async (req, res) => {
 app.get("/api/questions", requireAuth, (req, res) => res.json(getAccount(req.email).questions));
 app.post("/api/questions", requireAuth, (req, res) => {
   const text = String(req.body?.text ?? "").trim();
-  const options = (Array.isArray(req.body?.options) ? req.body.options : [])
-    .map((o) => String(o ?? "").trim())
-    .filter(Boolean);
-  // correct är null för en åsiktsomröstning, annars index i options
-  const raw = req.body?.correct;
-  const correct = raw === null || raw === undefined || raw === "" ? null : Number(raw);
   if (!text) return res.status(400).json({ error: "Frågetext saknas" });
-  if (options.length < 2 || options.length > 4) return res.status(400).json({ error: "Ange 2–4 alternativ" });
-  if (correct !== null && !(correct >= 0 && correct < options.length)) return res.status(400).json({ error: "Ogiltigt rätt svar" });
   const account = getAccount(req.email);
-  const q = { id: account.nextId++, text, options, correct };
+  let q;
+  if (req.body?.type === "text") {
+    // Fritext: spelarna skriver 1–3 ord, inga alternativ och inget rätt svar
+    q = { id: account.nextId++, type: "text", text, options: [], correct: null };
+  } else {
+    const options = (Array.isArray(req.body?.options) ? req.body.options : [])
+      .map((o) => String(o ?? "").trim())
+      .filter(Boolean);
+    // correct är null för en åsiktsomröstning, annars index i options
+    const raw = req.body?.correct;
+    const correct = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+    if (options.length < 2 || options.length > 4) return res.status(400).json({ error: "Ange 2–4 alternativ" });
+    if (correct !== null && !(correct >= 0 && correct < options.length)) return res.status(400).json({ error: "Ogiltigt rätt svar" });
+    q = { id: account.nextId++, type: "choice", text, options, correct };
+  }
   account.questions.push(q);
   save();
   res.status(201).json(q);
@@ -238,7 +245,7 @@ function snapshot(game) {
   const snap = { phase: game.phase ?? "lobby", lobby: lobby(game) };
   if (game.current >= 0) {
     snap.question = questionPayload(game);
-    snap.counts = answerCounts(game);
+    Object.assign(snap, distribution(game));
     snap.answered = game.answers.size;
     snap.total = activePlayers(game);
   }
@@ -268,15 +275,14 @@ function leaderboard(game) {
 
 function sendResults(game) {
   const q = game.questions[game.current];
-  const counts = answerCounts(game);
-  if (q.correct !== null) {
+  if (!isText(q) && q.correct !== null) {
     for (const [id, option] of game.answers) {
       if (option === q.correct) game.players.get(id).score += 1000;
     }
   }
   game.phase = "results";
   io.to(game.code).emit("game:results", {
-    counts,
+    ...distribution(game),
     correct: q.correct,
     scored: scored(game),
     leaderboard: leaderboard(game),
@@ -293,7 +299,34 @@ function endGame(game) {
 
 function questionPayload(game) {
   const q = game.questions[game.current];
-  return { index: game.current, total: game.questions.length, text: q.text, options: q.options };
+  return { index: game.current, total: game.questions.length, type: q.type ?? "choice", text: q.text, options: q.options };
+}
+
+const isText = (q) => q.type === "text";
+
+// Fritextsvar: max 3 ord och 40 tecken, överflödiga mellanslag tas bort. null om ogiltigt.
+function cleanText(raw) {
+  const s = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!s || s.length > 40 || s.split(" ").length > 3) return null;
+  return s;
+}
+
+// Fritextsvar grupperade skiftlägesokänsligt, vanligaste först. Första stavningen visas.
+function textAnswers(game) {
+  const groups = new Map();
+  for (const text of game.answers.values()) {
+    const key = text.toLowerCase();
+    const g = groups.get(key) ?? { text, count: 0 };
+    g.count++;
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.text.localeCompare(b.text, "sv"));
+}
+
+// Det värden behöver för att rita fördelningen: counts för flerval, answers för fritext
+function distribution(game) {
+  const q = game.questions[game.current];
+  return isText(q) ? { answers: textAnswers(game) } : { counts: answerCounts(game) };
 }
 
 function uniqueName(game, name) {
@@ -393,7 +426,7 @@ io.on("connection", (socket) => {
       toHost(game, "game:answered", {
         answered: game.answers.size,
         total: activePlayers(game),
-        counts: game.phase === "question" ? answerCounts(game) : undefined,
+        ...(game.phase === "question" ? distribution(game) : {}),
       });
     }
   });
@@ -406,18 +439,27 @@ io.on("connection", (socket) => {
     sendQuestion(game);
   });
 
-  socket.on("player:answer", ({ option } = {}) => {
+  // Flerval: { option: index }. Fritext: { text: "1–3 ord" }. Ack är valfritt, används för fel.
+  socket.on("player:answer", ({ option, text } = {}, ack = () => {}) => {
     const game = games.get(socket.data.code);
     const playerId = socket.data.playerId;
-    if (!game || game.phase !== "question" || !game.players.has(playerId)) return;
-    if (game.answers.has(playerId)) return; // ett svar per fråga
-    option = Number(option);
-    if (!(option >= 0 && option < game.questions[game.current].options.length)) return;
-    game.answers.set(playerId, option);
+    if (!game || game.phase !== "question" || !game.players.has(playerId)) return ack({ error: "Ingen fråga pågår" });
+    if (game.answers.has(playerId)) return ack({ error: "Du har redan svarat" }); // ett svar per fråga
+    const q = game.questions[game.current];
+    let answer;
+    if (isText(q)) {
+      answer = cleanText(text);
+      if (answer === null) return ack({ error: "Skriv 1–3 ord, max 40 tecken" });
+    } else {
+      answer = Number(option);
+      if (!(answer >= 0 && answer < q.options.length)) return ack({ error: "Ogiltigt alternativ" });
+    }
+    game.answers.set(playerId, answer);
+    ack({ ok: true, answer });
     // Fördelningen går bara till värden, spelarna ska inte påverkas av varandra
     const progress = { answered: game.answers.size, total: activePlayers(game) };
     io.to(game.code).except(game.host ?? "").emit("game:answered", progress);
-    toHost(game, "game:answered", { ...progress, counts: answerCounts(game) });
+    toHost(game, "game:answered", { ...progress, ...distribution(game) });
   });
 
   socket.on("host:next", () => {
@@ -452,7 +494,7 @@ io.on("connection", (socket) => {
       toHost(game, "game:answered", {
         answered: game.answers.size,
         total: activePlayers(game),
-        counts: game.phase === "question" ? answerCounts(game) : undefined,
+        ...(game.phase === "question" ? distribution(game) : {}),
       });
     }
   });
