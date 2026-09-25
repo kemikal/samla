@@ -33,7 +33,23 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    // TODO (live): skapa spel, visa lobby, starta, visa svarsfördelning, nästa fråga
+    const $ = (id) => document.getElementById(id);
+    const show = (id) => {
+      for (const s of document.querySelectorAll("section")) s.classList.add("hidden");
+      $(id).classList.remove("hidden");
+    };
+    let code = null;
+
+    socket.emit("host:create", (res) => {
+      code = res.code;
+      $("code").textContent = code;
+    });
+
+    socket.on("game:lobby", ({ players }) => {
+      $("players").textContent = players.length
+        ? `${players.length} spelare: ${players.join(", ")}`
+        : "Inga spelare än";
+    });
   </script>
 </body>
 </html>
