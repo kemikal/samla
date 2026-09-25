@@ -81,7 +81,11 @@
       $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${p.name} – ${p.score}</li>`).join("");
     };
     let code = null;
+    let hostKey = null;
     let options = [];
+
+    const saveSession = () => sessionStorage.setItem("samla-host", JSON.stringify({ code, hostKey }));
+    const clearSession = () => { sessionStorage.removeItem("samla-host"); code = hostKey = null; };
 
     function renderBars(counts, correct = null) {
       const max = Math.max(1, ...counts);
@@ -97,6 +101,8 @@
       socket.emit("host:create", (res) => {
         if (res.error) return ($("createError").textContent = res.error);
         code = res.code;
+        hostKey = res.hostKey;
+        saveSession();
         $("code").textContent = code;
         $("qr").src = `/qr/${code}`;
         $("joinUrl").textContent = location.host;
@@ -105,24 +111,58 @@
       });
     };
 
-    socket.on("game:lobby", ({ players }) => {
+    function renderLobby({ players }) {
       const online = players.filter((p) => p.connected).length;
       $("playerCount").textContent = `(${online})`;
       $("playerList").innerHTML = players.length
         ? players.map((p) => `<li class="${p.connected ? "" : "offline"}">${p.name}<span class="muted">${p.score}</span></li>`).join("")
         : `<li class="muted">Inga än</li>`;
-    });
+    }
+    socket.on("game:lobby", renderLobby);
 
     $("startBtn").onclick = () => socket.emit("host:start", { code });
     $("nextBtn").onclick = () => socket.emit("host:next", { code });
 
-    socket.on("game:question", ({ index, total, text, options: opts }) => {
+    function showQuestion({ index, total, text, options: opts }) {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
       options = opts;
       renderBars(options.map(() => 0));
       $("answered").textContent = "0 svar";
       $("nextBtn").textContent = "Visa resultat";
       show("question");
+    }
+    socket.on("game:question", showQuestion);
+
+    function showResults({ counts, correct, leaderboard }) {
+      renderBars(counts, correct);
+      $("nextBtn").textContent = "Nästa fråga";
+      renderBoard(leaderboard);
+      show("question", "leaderboard");
+    }
+    socket.on("game:results", showResults);
+
+    // Efter sidladdning eller tappad förbindelse: ta tillbaka spelet och rita om läget
+    socket.on("connect", () => {
+      const saved = code ? { code, hostKey } : JSON.parse(sessionStorage.getItem("samla-host") ?? "null");
+      if (!saved) return;
+      socket.emit("host:resume", saved, (res) => {
+        if (res.error) return clearSession();
+        ({ code, hostKey } = saved);
+        $("code").textContent = code;
+        $("qr").src = `/qr/${code}`;
+        $("joinUrl").textContent = location.host;
+        $("sidebar").classList.remove("hidden");
+        const st = res.state;
+        renderLobby(st.lobby);
+        if (st.phase === "lobby") return show("lobby");
+        showQuestion(st.question);
+        if (st.phase === "question") {
+          $("answered").textContent = `${st.answered} av ${st.total} har svarat`;
+          renderBars(st.counts);
+        } else {
+          showResults(st);
+        }
+      });
     });
 
     socket.on("game:answered", ({ answered, total, counts }) => {
@@ -130,14 +170,8 @@
       if (counts) renderBars(counts);
     });
 
-    socket.on("game:results", ({ counts, correct, leaderboard }) => {
-      renderBars(counts, correct);
-      $("nextBtn").textContent = "Nästa fråga";
-      renderBoard(leaderboard);
-      show("question", "leaderboard");
-    });
-
     socket.on("game:over", ({ leaderboard }) => {
+      clearSession();
       $("boardTitle").textContent = "Slutresultat";
       renderBoard(leaderboard);
       $("over").classList.remove("hidden");

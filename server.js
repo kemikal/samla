@@ -55,6 +55,8 @@ app.get("/health", (_req, res) =>
 
 // Alla spel lever i minnet: rumskod -> spel
 const games = new Map();
+// Så länge får värden vara borta innan spelet avslutas
+const HOST_GRACE_MS = 60000;
 
 function newCode() {
   let code;
@@ -68,6 +70,25 @@ function lobby(game) {
     code: game.code,
     players: [...game.players.values()].map(({ name, score, connected }) => ({ name, score, connected })),
   };
+}
+
+function toHost(game, event, payload) {
+  if (game.host) io.to(game.host).emit(event, payload);
+}
+
+function snapshot(game) {
+  const snap = { phase: game.phase ?? "lobby", lobby: lobby(game) };
+  if (game.current >= 0) {
+    snap.question = questionPayload(game);
+    snap.counts = answerCounts(game);
+    snap.answered = game.answers.size;
+    snap.total = activePlayers(game);
+  }
+  if (game.phase === "results") {
+    snap.correct = game.questions[game.current].correct;
+    snap.leaderboard = leaderboard(game);
+  }
+  return snap;
 }
 
 function hostGame(socket) {
@@ -89,10 +110,11 @@ function sendResults(game) {
   }
   game.phase = "results";
   io.to(game.code).emit("game:results", { counts, correct: q.correct, leaderboard: leaderboard(game) });
-  io.to(game.host).emit("game:lobby", lobby(game));
+  toHost(game, "game:lobby", lobby(game));
 }
 
 function endGame(game) {
+  clearTimeout(game.hostTimer);
   io.to(game.code).emit("game:over", { leaderboard: leaderboard(game) });
   games.delete(game.code);
   console.log("spel slut", game.code);
@@ -134,6 +156,7 @@ io.on("connection", (socket) => {
     const game = {
       code,
       host: socket.id,
+      hostKey: randomUUID(),
       questions: questions.map((q) => ({ ...q })),
       players: new Map(),
       current: -1,
@@ -145,8 +168,21 @@ io.on("connection", (socket) => {
     socket.data.code = code;
     socket.data.role = "host";
     console.log("spel skapat", code);
-    ack({ code });
+    ack({ code, hostKey: game.hostKey });
     io.to(code).emit("game:lobby", lobby(game));
+  });
+
+  // Värden återansluter efter tappad förbindelse eller sidladdning
+  socket.on("host:resume", ({ code, hostKey } = {}, ack) => {
+    const game = games.get(String(code ?? ""));
+    if (!game || game.hostKey !== hostKey) return ack({ error: "Spelet finns inte längre" });
+    clearTimeout(game.hostTimer);
+    game.host = socket.id;
+    socket.join(game.code);
+    socket.data.code = game.code;
+    socket.data.role = "host";
+    console.log("värd återansluten", game.code);
+    ack({ ok: true, code: game.code, state: snapshot(game) });
   });
 
   // Join används både första gången och vid återanslutning (samma playerId).
@@ -198,8 +234,8 @@ io.on("connection", (socket) => {
     game.answers.set(playerId, option);
     // Fördelningen går bara till värden, spelarna ska inte påverkas av varandra
     const progress = { answered: game.answers.size, total: activePlayers(game) };
-    io.to(game.code).except(game.host).emit("game:answered", progress);
-    io.to(game.host).emit("game:answered", { ...progress, counts: answerCounts(game) });
+    io.to(game.code).except(game.host ?? "").emit("game:answered", progress);
+    toHost(game, "game:answered", { ...progress, counts: answerCounts(game) });
   });
 
   socket.on("host:next", () => {
@@ -220,13 +256,18 @@ io.on("connection", (socket) => {
     console.log("disconnect", socket.id, reason);
     const game = games.get(socket.data.code);
     if (!game) return;
-    if (socket.data.role === "host") return endGame(game);
+    if (socket.data.role === "host") {
+      if (game.host !== socket.id) return; // redan återansluten
+      game.host = null;
+      game.hostTimer = setTimeout(() => endGame(game), HOST_GRACE_MS);
+      return;
+    }
     const player = game.players.get(socket.data.playerId);
     if (!player || player.socketId !== socket.id) return; // redan återansluten med ny socket
     player.connected = false;
     io.to(game.code).emit("game:lobby", lobby(game));
     if (game.current >= 0) {
-      io.to(game.host).emit("game:answered", {
+      toHost(game, "game:answered", {
         answered: game.answers.size,
         total: activePlayers(game),
         counts: game.phase === "question" ? answerCounts(game) : undefined,
