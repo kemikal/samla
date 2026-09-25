@@ -44,6 +44,23 @@ io.on("connection", (socket) => {
     io.to(code).emit("game:lobby", lobby(game));
   });
 
+  socket.on("player:join", ({ code, name } = {}, ack) => {
+    const game = games.get(String(code ?? "").trim());
+    name = String(name ?? "").trim().slice(0, 20);
+    if (!game) return ack({ error: "Hittar inget spel med den koden" });
+    if (game.current >= 0) return ack({ error: "Spelet har redan startat" });
+    if (!name) return ack({ error: "Skriv ett namn" });
+    const taken = [...game.players.values()].some((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (taken) return ack({ error: "Namnet är upptaget" });
+    game.players.set(socket.id, { name, score: 0 });
+    socket.join(game.code);
+    socket.data.code = game.code;
+    socket.data.role = "player";
+    console.log("spelare", name, "->", game.code);
+    ack({ ok: true });
+    io.to(game.code).emit("game:lobby", lobby(game));
+  });
+
   socket.on("disconnect", (reason) => console.log("disconnect", socket.id, reason));
 });
 

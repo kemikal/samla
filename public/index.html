@@ -34,7 +34,22 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    // TODO (live): join, ta emot fråga, svara, visa resultat
+    const $ = (id) => document.getElementById(id);
+    const show = (id) => {
+      for (const s of document.querySelectorAll("section")) s.classList.add("hidden");
+      $(id).classList.remove("hidden");
+    };
+    let code = null;
+
+    $("joinBtn").onclick = () => {
+      $("error").textContent = "";
+      socket.emit("player:join", { code: $("code").value, name: $("name").value }, (res) => {
+        if (res.error) return ($("error").textContent = res.error);
+        code = $("code").value.trim();
+        show("wait");
+      });
+    };
+    $("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click();
   </script>
 </body>
 </html>
