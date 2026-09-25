@@ -7,7 +7,7 @@ npm install
 npm run dev
 ```
 
-Värd: http://localhost:3000/host.html
+Admin: http://localhost:3000/admin
 Spelare: http://localhost:3000/
 
 Se `CLAUDE.md` för spelflöde, Socket.IO-kontrakt och deploy.
