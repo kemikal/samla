@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Samla – logga in</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Samla <span class="muted">skapa omröstning</span></h1>
+
+    <section id="form">
+      <p>Ange din e-postadress så mejlar vi en länk till din omröstning. Har du inget konto skapas ett automatiskt.</p>
+      <form id="loginForm">
+        <input name="email" type="email" placeholder="din@epost.se" required autocomplete="email" autofocus>
+        <button type="submit" id="sendBtn">Skicka länk</button>
+        <p id="error" class="muted"></p>
+      </form>
+      <p class="muted"><a href="/">Tillbaka till startsidan</a></p>
+    </section>
+
+    <section id="sent" class="hidden">
+      <h2>Kolla din mejl</h2>
+      <p>Vi har skickat en länk till <strong id="sentTo"></strong>. Öppna den så hamnar du direkt i din omröstning.</p>
+      <p class="muted">Länken gäller i 30 minuter. Inget mejl? Titta i skräpposten, eller <a href="/login">försök igen</a>.</p>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    $("loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const email = e.target.email.value.trim();
+      $("error").textContent = "";
+      $("sendBtn").disabled = true;
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) {
+          $("error").textContent = (await res.json()).error ?? "Något gick fel";
+          return;
+        }
+        $("sentTo").textContent = email;
+        $("form").classList.add("hidden");
+        $("sent").classList.remove("hidden");
+      } catch {
+        $("error").textContent = "Kunde inte nå servern";
+      } finally {
+        $("sendBtn").disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

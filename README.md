@@ -7,7 +7,7 @@ npm install
 npm run dev
 ```
 
-Admin: http://localhost:3000/admin
 Spelare: http://localhost:3000/
+Admin: http://localhost:3000/admin – kräver inloggning via magisk länk (utan SMTP loggas länken i terminalen).
 
 Se `CLAUDE.md` för spelflöde, Socket.IO-kontrakt och deploy.

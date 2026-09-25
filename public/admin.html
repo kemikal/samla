@@ -9,7 +9,10 @@
 </head>
 <body class="admin">
   <main>
-    <h1>Samla <span class="muted">admin</span></h1>
+    <header class="topRow">
+      <h1>Samla <span class="muted">admin</span></h1>
+      <p class="muted who"><span id="me"></span> <button class="small" id="logoutBtn">Logga ut</button></p>
+    </header>
 
     <section id="editor">
       <h2>Frågor</h2>
@@ -56,10 +59,6 @@
 
     <section id="question" class="hidden">
       <p id="qText"></p>
-      <div class="chartToggle">
-        <button class="small" data-chart="bars">Staplar</button>
-        <button class="small" data-chart="donut">Cirkel</button>
-      </div>
       <div id="chart"></div>
       <p id="answered" class="muted"></p>
       <button id="nextBtn">Visa resultat</button>
@@ -85,8 +84,9 @@
       for (const s of document.querySelectorAll("main > section")) s.classList.add("hidden");
       for (const id of ids) $(id).classList.remove("hidden");
     };
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const renderBoard = (list) => {
-      $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${p.name} – ${p.score}</li>`).join("");
+      $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${esc(p.name)} – ${p.score}</li>`).join("");
     };
     let code = null;
     let hostKey = null;
@@ -95,74 +95,28 @@
     const saveSession = () => sessionStorage.setItem("samla-host", JSON.stringify({ code, hostKey }));
     const clearSession = () => { sessionStorage.removeItem("samla-host"); code = hostKey = null; };
 
-    // Diagram: staplar eller cirkel (donut), båda ritas om vid varje svar
-    let chartType = localStorage.getItem("samla-chart") ?? "bars";
-    let lastCounts = [], lastCorrect = null;
+    // Inloggad användare och utloggning
+    fetch("/api/me").then((r) => (r.ok ? r.json() : Promise.reject())).then((me) => ($("me").textContent = me.email)).catch(() => location.replace("/login"));
+    $("logoutBtn").onclick = async () => {
+      await fetch("/api/logout", { method: "POST" });
+      clearSession();
+      location.replace("/login");
+    };
+
+    // Staplar över svarsfördelningen, visas direkt och ritas om vid varje svar
     const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
     const cls = (i, correct) => (correct === null || correct === undefined ? "" : i === correct ? "correct" : "wrong");
 
-    function renderBars(counts, correct) {
+    function renderChart(counts, correct) {
       const total = counts.reduce((a, b) => a + b, 0);
       const max = Math.max(1, ...counts);
-      return `<div class="bars">${options.map((o, i) => `
+      $("chart").innerHTML = `<div class="bars">${options.map((o, i) => `
         <div class="bar ${cls(i, correct)}">
-          <span class="label">${o}</span>
+          <span class="label">${esc(o)}</span>
           <span class="track"><span class="fill c${i}" style="width:${(counts[i] / max) * 100}%"></span></span>
           <span class="count">${counts[i]} <small class="muted">${pct(counts[i], total)}%</small></span>
         </div>`).join("")}</div>`;
     }
-
-    function renderDonut(counts, correct) {
-      const total = counts.reduce((a, b) => a + b, 0);
-      const R = 80, W = 30, C = 100;
-      const point = (angle, r) => [C + r * Math.cos(angle), C + r * Math.sin(angle)];
-      const segments = [];
-      let start = -Math.PI / 2;
-      counts.forEach((n, i) => {
-        if (!n) return;
-        const sweep = (n / total) * Math.PI * 2;
-        const end = start + sweep;
-        // Full cirkel går inte att rita som en båge, använd en ring
-        if (n === total) {
-          segments.push(`<circle cx="${C}" cy="${C}" r="${R}" fill="none" class="seg c${i} ${cls(i, correct)}" stroke-width="${W}"/>`);
-        } else {
-          const gap = 0.02; // liten lucka mellan segmenten
-          const [x1, y1] = point(start + gap, R), [x2, y2] = point(end - gap, R);
-          const large = sweep > Math.PI ? 1 : 0;
-          segments.push(`<path d="M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2}" fill="none" class="seg c${i} ${cls(i, correct)}" stroke-width="${W}"/>`);
-        }
-        // Procent på segmentet om det är stort nog
-        if (n / total >= 0.08) {
-          const [lx, ly] = point(start + sweep / 2, R);
-          segments.push(`<text x="${lx}" y="${ly}" class="segLabel">${pct(n, total)}%</text>`);
-        }
-        start = end;
-      });
-      const ring = total ? "" : `<circle cx="${C}" cy="${C}" r="${R}" fill="none" class="seg empty" stroke-width="${W}"/>`;
-      return `<div class="donutWrap">
-        <svg viewBox="0 0 200 200" class="donut" role="img" aria-label="Svarsfördelning">
-          ${ring}${segments.join("")}
-          <text x="${C}" y="${C}" class="donutTotal">${total}</text>
-          <text x="${C}" y="${C + 18}" class="donutSub">svar</text>
-        </svg>
-        <ul class="legend">${options.map((o, i) => `
-          <li class="${cls(i, correct)}"><span class="swatch c${i}"></span><span class="label">${o}</span><span class="count">${counts[i]} <small class="muted">${pct(counts[i], total)}%</small></span></li>`).join("")}
-        </ul>
-      </div>`;
-    }
-
-    function renderChart(counts = lastCounts, correct = lastCorrect) {
-      lastCounts = counts; lastCorrect = correct;
-      $("chart").innerHTML = chartType === "donut" ? renderDonut(counts, correct) : renderBars(counts, correct);
-      for (const b of document.querySelectorAll("[data-chart]")) b.classList.toggle("active", b.dataset.chart === chartType);
-    }
-    document.querySelector(".chartToggle").onclick = (e) => {
-      const b = e.target.closest("[data-chart]");
-      if (!b) return;
-      chartType = b.dataset.chart;
-      localStorage.setItem("samla-chart", chartType);
-      renderChart();
-    };
 
     $("createBtn").onclick = () => {
       socket.emit("host:create", (res) => {
@@ -182,7 +136,7 @@
       const online = players.filter((p) => p.connected).length;
       $("playerCount").textContent = `(${online})`;
       $("playerList").innerHTML = players.length
-        ? players.map((p) => `<li class="${p.connected ? "" : "offline"}">${p.name}<span class="muted">${p.score}</span></li>`).join("")
+        ? players.map((p) => `<li class="${p.connected ? "" : "offline"}">${esc(p.name)}<span class="muted">${p.score}</span></li>`).join("")
         : `<li class="muted">Inga än</li>`;
     }
     socket.on("game:lobby", renderLobby);
@@ -246,11 +200,13 @@
     });
 
     async function loadQuestions() {
-      const qs = await (await fetch("/api/questions")).json();
+      const res = await fetch("/api/questions");
+      if (res.status === 401) return location.replace("/login");
+      const qs = await res.json();
       $("qList").innerHTML = qs.map((q) => `
         <li>
-          <strong>${q.text}</strong>
-          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${o}</u>` : o).join(" · ")}${q.correct === null ? " · <em>omröstning</em>" : ""}</span>
+          <strong>${esc(q.text)}</strong>
+          <span class="muted">${q.options.map((o, i) => i === q.correct ? `<u>${esc(o)}</u>` : esc(o)).join(" · ")}${q.correct === null ? " · <em>omröstning</em>" : ""}</span>
           <button class="small" data-del="${q.id}">Ta bort</button>
         </li>`).join("");
     }

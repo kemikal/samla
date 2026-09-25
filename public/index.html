@@ -30,6 +30,10 @@
     <section id="result" class="hidden">
       <p id="resultText"></p>
     </section>
+
+    <footer class="muted">
+      <a href="/login">Skapa ny omröstning</a>
+    </footer>
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -37,7 +41,7 @@
     const socket = io();
     const $ = (id) => document.getElementById(id);
     const show = (id) => {
-      for (const s of document.querySelectorAll("section")) s.classList.add("hidden");
+      for (const s of document.querySelectorAll("main > section")) s.classList.add("hidden");
       $(id).classList.remove("hidden");
     };
     let code = null;

@@ -75,25 +75,11 @@ body.admin { flex-direction: row; align-items: flex-start; justify-content: cent
 .noCorrect { margin-bottom: 4px; }
 .noCorrect input { margin-bottom: 0; }
 
-/* Diagramväxling */
-.chartToggle { display: flex; gap: 4px; margin: 8px 0; }
-.chartToggle button { background: #2c2c44; color: var(--fg); margin: 0; }
-.chartToggle button.active { background: var(--fg); color: var(--bg); }
-
-/* Cirkeldiagram */
-.donutWrap { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
-.donut { width: 260px; height: 260px; flex-shrink: 0; }
-.donut .seg { stroke-linecap: butt; transition: opacity 0.3s; }
-.donut .seg.empty { stroke: #2c2c44; }
-.donut .seg.wrong { opacity: 0.35; }
-.donut .segLabel { fill: var(--fg); font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
-.donut .donutTotal { fill: var(--fg); font-size: 34px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
-.donut .donutSub { fill: var(--muted); font-size: 12px; text-anchor: middle; dominant-baseline: central; }
-.seg.c0 { stroke: var(--a); } .seg.c1 { stroke: var(--b); } .seg.c2 { stroke: var(--c); } .seg.c3 { stroke: var(--d); }
-.legend { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 1.1rem; min-width: 220px; }
-.legend li { display: grid; grid-template-columns: 16px 1fr auto; gap: 12px; align-items: center; }
-.legend li.wrong { opacity: 0.4; }
-.legend li.correct .label { text-decoration: underline; font-weight: 700; }
-.legend .count { font-weight: 700; white-space: nowrap; }
-.swatch { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
-.swatch.c0 { background: var(--a); } .swatch.c1 { background: var(--b); } .swatch.c2 { background: var(--c); } .swatch.c3 { background: var(--d); }
+/* Inloggning och sidhuvud */
+.topRow { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.topRow h1 { margin-bottom: 8px; }
+.who { margin: 0; font-size: 0.9rem; }
+footer { margin-top: 48px; font-size: 0.9rem; }
+a { color: var(--fg); }
+a:has(> button) { text-decoration: none; }
+form p.muted { margin: 8px 0 0; }
