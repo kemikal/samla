@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Samla – värd</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Samla <span class="muted">värd</span></h1>
+
+    <section id="lobby">
+      <p class="muted">Gå till <strong>samla.spinnrock.com</strong> och ange koden</p>
+      <p id="code" class="code">––––</p>
+      <p id="players" class="muted">Inga spelare än</p>
+      <button id="startBtn">Starta spelet</button>
+    </section>
+
+    <section id="question" class="hidden">
+      <p id="qText"></p>
+      <div id="options" class="options"></div>
+      <p id="answered" class="muted"></p>
+      <button id="nextBtn">Nästa</button>
+    </section>
+
+    <section id="leaderboard" class="hidden">
+      <h2>Topplista</h2>
+      <ol id="board"></ol>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    // TODO (live): skapa spel, visa lobby, starta, visa svarsfördelning, nästa fråga
+  </script>
+</body>
+</html>

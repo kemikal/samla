@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Samla</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Samla</h1>
+
+    <section id="join">
+      <input id="code" placeholder="Rumskod" autocomplete="off" inputmode="numeric">
+      <input id="name" placeholder="Ditt namn" autocomplete="off">
+      <button id="joinBtn">Gå med</button>
+      <p id="error" class="muted"></p>
+    </section>
+
+    <section id="wait" class="hidden">
+      <p class="muted">Du är med! Väntar på att spelet startar…</p>
+    </section>
+
+    <section id="question" class="hidden">
+      <p id="qText"></p>
+      <div id="options" class="options"></div>
+    </section>
+
+    <section id="result" class="hidden">
+      <p id="resultText"></p>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    // TODO (live): join, ta emot fråga, svara, visa resultat
+  </script>
+</body>
+</html>

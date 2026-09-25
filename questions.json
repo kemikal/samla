@@ -1,0 +1,27 @@
+[
+  {
+    "text": "Vad står HTTP för?",
+    "options": ["HyperText Transfer Protocol", "High Transfer Text Process", "Hyper Transfer Tool Package", "Home Tool Transfer Protocol"],
+    "correct": 0
+  },
+  {
+    "text": "Vilket protokoll håller en öppen förbindelse mellan klient och server?",
+    "options": ["REST", "WebSocket", "SMTP", "FTP"],
+    "correct": 1
+  },
+  {
+    "text": "Vad returnerar `typeof null` i JavaScript?",
+    "options": ["\"null\"", "\"undefined\"", "\"object\"", "\"boolean\""],
+    "correct": 2
+  },
+  {
+    "text": "Vilken HTTP-statuskod betyder 'Not Found'?",
+    "options": ["200", "301", "403", "404"],
+    "correct": 3
+  },
+  {
+    "text": "Vad heter SignalR:s motsvarighet till Socket.IO:s 'room'?",
+    "options": ["Group", "Channel", "Topic", "Hub"],
+    "correct": 0
+  }
+]
