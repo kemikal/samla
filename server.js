@@ -78,9 +78,8 @@ function leaderboard(game) {
 
 function sendResults(game) {
   const q = game.questions[game.current];
-  const counts = q.options.map(() => 0);
+  const counts = answerCounts(game);
   for (const [id, option] of game.answers) {
-    counts[option]++;
     if (option === q.correct) game.players.get(id).score += 1000;
   }
   game.phase = "results";
@@ -91,6 +90,12 @@ function endGame(game) {
   io.to(game.code).emit("game:over", { leaderboard: leaderboard(game) });
   games.delete(game.code);
   console.log("spel slut", game.code);
+}
+
+function answerCounts(game) {
+  const counts = game.questions[game.current].options.map(() => 0);
+  for (const option of game.answers.values()) counts[option]++;
+  return counts;
 }
 
 function activePlayers(game) {
@@ -164,7 +169,10 @@ io.on("connection", (socket) => {
     option = Number(option);
     if (!(option >= 0 && option < game.questions[game.current].options.length)) return;
     game.answers.set(socket.id, option);
-    io.to(game.code).emit("game:answered", { answered: game.answers.size, total: activePlayers(game) });
+    // Fördelningen går bara till värden, spelarna ska inte påverkas av varandra
+    const progress = { answered: game.answers.size, total: activePlayers(game) };
+    io.to(game.code).except(game.host).emit("game:answered", progress);
+    io.to(game.host).emit("game:answered", { ...progress, counts: answerCounts(game) });
   });
 
   socket.on("host:next", () => {

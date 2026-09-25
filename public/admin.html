@@ -51,7 +51,7 @@
 
     <section id="question" class="hidden">
       <p id="qText"></p>
-      <div id="options" class="options"></div>
+      <div id="bars" class="bars"></div>
       <p id="answered" class="muted"></p>
       <button id="nextBtn">Visa resultat</button>
     </section>
@@ -75,6 +75,17 @@
       $("board").innerHTML = list.slice(0, 10).map((p) => `<li>${p.name} – ${p.score}</li>`).join("");
     };
     let code = null;
+    let options = [];
+
+    function renderBars(counts, correct = null) {
+      const max = Math.max(1, ...counts);
+      $("bars").innerHTML = options.map((o, i) => `
+        <div class="bar ${correct === null ? "" : i === correct ? "correct" : "wrong"}">
+          <span class="label">${o}</span>
+          <span class="track"><span class="fill c${i}" style="width:${(counts[i] / max) * 100}%"></span></span>
+          <span class="count">${counts[i]}</span>
+        </div>`).join("");
+    }
 
     $("createBtn").onclick = () => {
       socket.emit("host:create", (res) => {
@@ -90,25 +101,22 @@
     $("startBtn").onclick = () => socket.emit("host:start", { code });
     $("nextBtn").onclick = () => socket.emit("host:next", { code });
 
-    socket.on("game:question", ({ index, total, text, options }) => {
+    socket.on("game:question", ({ index, total, text, options: opts }) => {
       $("qText").textContent = `${index + 1}/${total}: ${text}`;
-      $("options").innerHTML = options.map((o) => `<button disabled>${o}</button>`).join("");
+      options = opts;
+      renderBars(options.map(() => 0));
       $("answered").textContent = "0 svar";
       $("nextBtn").textContent = "Visa resultat";
       show("question");
     });
 
-    socket.on("game:answered", ({ answered, total }) => {
+    socket.on("game:answered", ({ answered, total, counts }) => {
       $("answered").textContent = `${answered} av ${total} har svarat`;
+      if (counts) renderBars(counts);
     });
 
     socket.on("game:results", ({ counts, correct, leaderboard }) => {
-      const btns = $("options").querySelectorAll("button");
-      btns.forEach((b, i) => {
-        b.textContent = `${b.textContent} (${counts[i]})`;
-        b.style.opacity = i === correct ? "1" : "0.35";
-        if (i === correct) b.style.outline = "4px solid var(--fg)";
-      });
+      renderBars(counts, correct);
       $("nextBtn").textContent = "Nästa fråga";
       renderBoard(leaderboard);
       show("question", "leaderboard");

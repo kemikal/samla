@@ -49,3 +49,16 @@ h2 { font-size: 1.2rem; margin: 24px 0 8px; }
 button.small { padding: 4px 10px; font-size: 0.85rem; margin-left: 8px; }
 #qList li { margin-bottom: 8px; }
 #qList strong { display: block; }
+
+/* Staplar */
+.bars { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+.bar { display: grid; grid-template-columns: minmax(120px, 1fr) 3fr 3ch; gap: 12px; align-items: center; font-size: 1.1rem; }
+.bar .track { height: 32px; background: #2c2c44; border-radius: 6px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; transition: width 0.3s ease; }
+.bar .count { text-align: right; font-weight: 700; }
+.bar.wrong { opacity: 0.4; }
+.bar.correct .label { text-decoration: underline; font-weight: 700; }
+.fill.c0 { background: var(--a); }
+.fill.c1 { background: var(--b); }
+.fill.c2 { background: var(--c); }
+.fill.c3 { background: var(--d); }
