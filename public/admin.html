@@ -24,18 +24,16 @@
       </div>
       <ol id="qList" class="qList"></ol>
 
-      <form id="qForm" class="card">
-        <h3>Ny fråga</h3>
+      <div class="tabs" role="tablist" aria-label="Typ av ny fråga">
+        <button type="button" role="tab" class="tab active" data-type="choice" aria-selected="true">Ny flervalsfråga</button>
+        <button type="button" role="tab" class="tab" data-type="text" aria-selected="false">Ny fritextfråga</button>
+      </div>
+      <form id="qForm" class="card tabPanel" role="tabpanel">
+        <input type="hidden" name="type" value="choice">
         <label class="field">
           <span>Fråga</span>
           <input name="text" placeholder="T.ex. Vilket protokoll håller förbindelsen öppen?" required autocomplete="off">
         </label>
-
-        <fieldset class="qType">
-          <legend>Svarstyp</legend>
-          <label><input type="radio" name="type" value="choice" checked> Flerval</label>
-          <label><input type="radio" name="type" value="text"> Fritext <span class="muted">(1–3 ord)</span></label>
-        </fieldset>
 
         <p id="textHint" class="muted hidden">Eleverna skriver ett kort svar på högst tre ord. Svaren visas som ett ordmoln där vanliga svar blir större.</p>
 
@@ -300,14 +298,28 @@
       loadQuestions();
     };
 
-    // Fritext har inga alternativ: fältgruppen inaktiveras så att required inte stoppar formuläret
+    // Flikarna styr det dolda type-fältet. Fritext har inga alternativ: fältgruppen
+    // inaktiveras så att required inte stoppar formuläret.
     function applyType() {
-      const isText = $("qForm").type.value === "text";
+      const type = $("qForm").type.value;
+      const isText = type === "text";
+      for (const t of document.querySelectorAll(".tab")) {
+        const on = t.dataset.type === type;
+        t.classList.toggle("active", on);
+        t.setAttribute("aria-selected", on);
+      }
       $("optsFieldset").disabled = isText;
       $("optsFieldset").classList.toggle("hidden", isText);
       $("textHint").classList.toggle("hidden", !isText);
+      $("qForm").text.placeholder = isText ? "T.ex. Beskriv dagens lektion med ett ord" : "T.ex. Vilket protokoll håller förbindelsen öppen?";
     }
-    $("qForm").addEventListener("change", (e) => { if (e.target.name === "type") applyType(); });
+    document.querySelector(".tabs").onclick = (e) => {
+      const tab = e.target.closest(".tab");
+      if (!tab) return;
+      $("qForm").type.value = tab.dataset.type;
+      $("formError").textContent = "";
+      applyType();
+    };
     $("qForm").addEventListener("reset", () => setTimeout(applyType));
 
     $("qForm").onsubmit = async (e) => {
